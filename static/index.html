@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AP Survey Bot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="bg-pattern" aria-hidden="true"></div>
+
+  <main class="app">
+    <header class="hero">
+      <div class="logo-ring">
+        <span class="logo-text">AP</span>
+      </div>
+      <h1>Survey Auto-Filler</h1>
+      <p class="tagline">Type your 21-digit code, scan your receipt with the camera, or upload a photo — we’ll detect the number for you.</p>
+    </header>
+
+    <section class="card scan-card">
+      <span class="label">Scan receipt</span>
+      <div class="scan-actions">
+        <button type="button" id="openCameraBtn" class="btn-secondary">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Use camera
+        </button>
+        <label for="photoInput" class="btn-secondary">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Upload photo
+        </label>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
+      </div>
+      <div class="scan-preview" id="scanPreview" hidden>
+        <img id="scanPreviewImg" alt="Receipt preview" />
+        <p class="scan-status" id="scanStatus"></p>
+      </div>
+    </section>
+
+    <section class="card form-card">
+      <label for="surveyCode" class="label">Survey code</label>
+      <div class="input-wrap">
+        <input
+          id="surveyCode"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          placeholder="21-digit code from receipt"
+          maxlength="27"
+          spellcheck="false"
+        />
+        <span class="digit-count" id="digitCount">0 / 21</span>
+      </div>
+      <p class="hint">21 digits at the bottom of your receipt — no spaces or hyphens.</p>
+
+      <button type="button" id="runBtn" class="btn-primary">
+        <span class="btn-label">Start survey</span>
+        <span class="btn-spinner" hidden aria-hidden="true"></span>
+      </button>
+    </section>
+
+    <section class="card progress-card" id="progressCard" hidden>
+      <div class="progress-header">
+        <span>Progress</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <p class="current-step" id="currentStep">Waiting to start…</p>
+    </section>
+
+    <section class="card log-card">
+      <div class="log-header">
+        <h2>Activity log</h2>
+        <button type="button" id="clearLog" class="btn-ghost">Clear</button>
+      </div>
+      <div class="log-feed" id="logFeed" role="log" aria-live="polite">
+        <p class="log-empty">No activity yet. Enter a code or scan a receipt, then press Start.</p>
+      </div>
+    </section>
+
+    <div class="result-banner" id="resultBanner" hidden role="status"></div>
+
+    <figure class="screenshot-wrap" id="screenshotWrap" hidden>
+      <img id="screenshotImg" alt="Survey completion screenshot" />
+    </figure>
+  </main>
+
+  <footer class="footer">
+    <p>AP Survey Bot · Playwright automation · One code per receipt</p>
+  </footer>
+
+  <div class="modal" id="cameraModal" hidden role="dialog" aria-labelledby="cameraModalTitle" aria-modal="true">
+    <div class="modal-backdrop" id="cameraBackdrop"></div>
+    <div class="modal-panel">
+      <h2 id="cameraModalTitle" class="modal-title">Point at your receipt code</h2>
+      <div class="camera-wrap">
+        <video id="cameraVideo" autoplay playsinline muted></video>
+        <canvas id="captureCanvas" hidden></canvas>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="captureBtn" class="btn-primary btn-compact">Capture &amp; scan</button>
+        <button type="button" id="closeCameraBtn" class="btn-secondary btn-compact">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
