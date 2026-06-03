@@ -2,47 +2,77 @@
 
 Automates the Tim Hortons / Qualtrics receipt survey using Playwright. Web UI supports manual entry, camera scan, and receipt OCR (Tesseract.js in the browser).
 
-## Deploy architecture (Vercel + Railway)
+**Playwright cannot run on Vercel** (serverless size/time limits). Use **Render** or **Fly.io** for the bot — or skip Vercel entirely.
 
-Playwright cannot run on Vercel serverless (size & time limits). Use a **two-part deploy**:
+---
+
+## Option 1 — Render only (recommended, one platform)
+
+Everything on a single URL: UI + survey bot. No Vercel, no Railway.
+
+1. Push this repo to GitHub.
+2. Go to [render.com](https://render.com) → **New** → **Blueprint** → connect `Surveybot` repo  
+   (or **New Web Service** → Docker → select repo).
+3. Render uses `render.yaml` + `Dockerfile` (Chromium included).
+4. Wait for deploy → open your URL, e.g. `https://ap-survey-bot.onrender.com`.
+5. Done. Use the site like localhost.
+
+**Free tier note:** Render sleeps after ~15 min idle; first request after sleep may take 30–60s (cold start).
+
+---
+
+## Option 2 — Vercel (UI) + Render (bot)
 
 | Platform | Role |
 |----------|------|
-| **Vercel** | Static UI (`public/`) + `/api/run` proxy |
-| **Railway** (or Render) | Playwright backend (`app.py`) |
+| **Vercel** | Fast CDN for `public/` + `/api/run` proxy |
+| **Render** | Playwright backend (`app.py`) |
 
-```
-Browser → Vercel /api/run → Railway /api/run-sync → Playwright
-```
+### Step A — Render backend
 
-Camera/OCR runs entirely in the browser on Vercel — no backend needed for scanning.
+Same as Option 1 steps 1–4. Copy your Render URL (no trailing slash).
 
----
+### Step B — Vercel frontend
 
-## 1. Deploy backend to Railway
-
-1. Push this repo to GitHub.
-2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → select `Surveybot`.
-3. Railway uses the `Dockerfile` (includes Chromium).
-4. After deploy, copy the public URL, e.g. `https://surveybot-production.up.railway.app`.
-5. Optional env on Railway:
-   - `ALLOWED_ORIGINS` = `https://your-app.vercel.app` (or `*`)
-
----
-
-## 2. Deploy frontend to Vercel
-
-1. [vercel.com](https://vercel.com) → **Add New Project** → import `Surveybot` from GitHub.
-2. Framework preset: **Other** (uses `vercel.json` automatically).
-3. **Environment variable** (required for survey automation):
+1. [vercel.com](https://vercel.com) → import **Surveybot** from GitHub.
+2. Preset: **Other**
+3. **Output Directory:** `public`
+4. **Install Command:** `pip install -r requirements.txt`
+5. **Build Command:** leave empty
+6. **Environment variable:**
 
    | Name | Value |
    |------|--------|
-   | `BOT_API_URL` | Your Railway URL, no trailing slash |
+   | `BOT_API_URL` | `https://ap-survey-bot.onrender.com` (your Render URL) |
 
-4. Deploy.
+7. Deploy.
 
-Vercel serves `public/` and routes `/api/run` to a serverless function that proxies to Railway.
+Camera/OCR work on Vercel; **Start survey** calls Render through the proxy.
+
+---
+
+## Option 3 — Fly.io (instead of Render)
+
+```bash
+# Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
+cd Surveybot
+fly launch    # follow prompts, use existing fly.toml
+fly deploy
+```
+
+Use the Fly URL everywhere you would use Render (e.g. `BOT_API_URL` on Vercel, or open the Fly URL directly for all-in-one).
+
+---
+
+## Vercel dashboard cheat sheet
+
+| Field | Value |
+|-------|--------|
+| Framework | Other |
+| Build Command | *(empty)* |
+| Output Directory | `public` |
+| Install Command | `pip install -r requirements.txt` |
+| Env var | `BOT_API_URL` = your Render/Fly URL |
 
 ---
 
@@ -56,7 +86,7 @@ playwright install chromium
 uvicorn app:app --reload
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000) — uses live SSE streaming (no proxy).
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ## CLI
 
@@ -71,14 +101,12 @@ python tims_survey_bot_FINAL.py
 ## Project layout
 
 ```
-public/          → Vercel static site
-api/             → Vercel serverless (config + proxy)
-app.py           → Railway / local FastAPI backend
-survey_bot.py    → Playwright automation
-vercel.json      → Vercel config
-Dockerfile       → Railway Playwright image
+public/              → Static UI (Vercel or served by app.py on Render)
+api/                 → Vercel serverless proxy only
+app.py               → Full backend (Render / Fly / local)
+survey_bot.py        → Playwright automation
+render.yaml          → Render one-click deploy
+Dockerfile           → Playwright + Chromium image
+fly.toml             → Optional Fly.io deploy
+vercel.json          → Optional Vercel static + proxy
 ```
-
-## Vercel-only (UI preview)
-
-You can deploy to Vercel without Railway. Camera scan and OCR work; **Start survey** shows a message until `BOT_API_URL` is set.

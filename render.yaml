@@ -1,0 +1,13 @@
+# Render Blueprint — one-click deploy (UI + Playwright on one URL)
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: ap-survey-bot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/config
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: "*"

@@ -25,8 +25,8 @@ class handler(BaseHTTPRequestHandler):
                 {
                     "status": "error",
                     "message": (
-                        "Backend not configured. Deploy app.py to Railway (see README), "
-                        "then set BOT_API_URL in Vercel project settings."
+                        "Backend not configured. Deploy to Render (see README) "
+                        "and set BOT_API_URL in Vercel to your Render URL."
                     ),
                     "logs": [
                         {

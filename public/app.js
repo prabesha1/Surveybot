@@ -132,7 +132,7 @@ async function loadDeployConfig() {
     const cfg = await res.json();
     deployMode = cfg.mode || "local";
     if (cfg.mode === "unconfigured") {
-      appendLog("Backend not linked — deploy Railway and set BOT_API_URL on Vercel.", "warn");
+      appendLog("Backend not linked — deploy Render and set BOT_API_URL on Vercel (or use Render-only).", "warn");
     }
   } catch {
     deployMode = "local";

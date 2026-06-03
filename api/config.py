@@ -18,7 +18,7 @@ class handler(BaseHTTPRequestHandler):
                 "apiBase": bot_url,
                 "mode": "proxy" if bot_url else "unconfigured",
                 "hint": (
-                    "Set BOT_API_URL on Vercel to your Railway/Render backend URL."
+                    "Set BOT_API_URL on Vercel to your Render (or Fly.io) backend URL."
                     if not bot_url
                     else None
                 ),

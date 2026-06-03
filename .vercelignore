@@ -4,7 +4,8 @@ static/
 __pycache__/
 .env
 Dockerfile
-railway.toml
+render.yaml
+fly.toml
 tims_survey_bot_FINAL.py
 survey_bot.py
 app.py
