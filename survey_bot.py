@@ -1,9 +1,25 @@
 """Tim Hortons survey automation — shared by CLI and web app."""
 
 import asyncio
+import base64
+import os
+from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from playwright.async_api import async_playwright
+
+
+def _screenshot_dir() -> Path:
+    return Path(os.environ.get("TMPDIR", "/tmp"))
+
+
+def encode_screenshot(path: Optional[str]) -> Optional[str]:
+    if not path:
+        return None
+    p = Path(path)
+    if not p.is_file():
+        return None
+    return base64.b64encode(p.read_bytes()).decode("ascii")
 
 SURVEY_URL = (
     "https://rbixm.qualtrics.com/jfe/form/SV_3lMYn8fpUtkEu7c"
@@ -163,7 +179,7 @@ async def run_survey(
                         "thank you for participating",
                     ]
                 ):
-                    screenshot_path = "survey_done.png"
+                    screenshot_path = str(_screenshot_dir() / "survey_done.png")
                     await page.screenshot(path=screenshot_path)
                     await log("Survey submitted successfully!", "success")
                     result = {
@@ -180,7 +196,7 @@ async def run_survey(
                     last_prog = prog
 
                 if stuck_count >= 6:
-                    screenshot_path = f"stuck_{prog}.png"
+                    screenshot_path = str(_screenshot_dir() / f"stuck_{prog}.png")
                     await page.screenshot(path=screenshot_path)
                     await log(f"Stuck at {prog}% — see screenshot.", "warn")
                     result = {

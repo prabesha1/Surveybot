@@ -1,0 +1,11 @@
+.venv/
+static/
+*.png
+__pycache__/
+.env
+Dockerfile
+railway.toml
+tims_survey_bot_FINAL.py
+survey_bot.py
+app.py
+requirements-server.txt
