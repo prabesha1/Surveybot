@@ -30,6 +30,7 @@ let scanning = false;
 let cameraStream = null;
 let ocrWorker = null;
 let deployMode = "local";
+let apiBase = "";
 
 function digitsOnly(value) {
   return value.replace(/\D/g, "");
@@ -127,16 +128,37 @@ function processDone(data) {
 
 async function loadDeployConfig() {
   try {
+    const res = await fetch("/deploy.json");
+    if (res.ok) {
+      const cfg = await res.json();
+      apiBase = (cfg.apiBase || "").replace(/\/$/, "");
+      deployMode = cfg.mode || (apiBase ? "remote" : "unconfigured");
+      if (deployMode === "unconfigured") {
+        appendLog(
+          "Set BOT_API_URL on Vercel to https://ap-survey-bot.onrender.com (or use Render URL only).",
+          "warn"
+        );
+      }
+      return;
+    }
+  } catch {
+    /* deploy.json only exists after Vercel build */
+  }
+
+  try {
     const res = await fetch("/api/config");
     if (!res.ok) return;
     const cfg = await res.json();
     deployMode = cfg.mode || "local";
-    if (cfg.mode === "unconfigured") {
-      appendLog("Backend not linked — deploy Render and set BOT_API_URL on Vercel (or use Render-only).", "warn");
-    }
+    apiBase = (cfg.apiBase || "").replace(/\/$/, "");
   } catch {
     deployMode = "local";
   }
+}
+
+function surveyRunUrl() {
+  if (apiBase) return `${apiBase}/api/run-sync`;
+  return "/api/run";
 }
 
 function parseApiError(err) {
@@ -399,7 +421,7 @@ runBtn.addEventListener("click", async () => {
   appendLog("Starting bot…", "info");
 
   try {
-    const res = await fetch("/api/run", {
+    const res = await fetch(surveyRunUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ survey_code: code }),

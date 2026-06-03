@@ -37,8 +37,8 @@ Same as Option 1 steps 1–4. Copy your Render URL (no trailing slash).
 1. [vercel.com](https://vercel.com) → import **Surveybot** from GitHub.
 2. Preset: **Other**
 3. **Output Directory:** `public`
-4. **Install Command:** `pip install -r requirements.txt`
-5. **Build Command:** leave empty
+4. **Install Command:** leave empty
+5. **Build Command:** leave empty (uses `vercel.json`)
 6. **Environment variable:**
 
    | Name | Value |
@@ -66,13 +66,17 @@ Use the Fly URL everywhere you would use Render (e.g. `BOT_API_URL` on Vercel, o
 
 ## Vercel dashboard cheat sheet
 
+Uses `vercel.json` automatically. In the dashboard you can leave most fields **empty** (Override if needed):
+
 | Field | Value |
 |-------|--------|
 | Framework | Other |
-| Build Command | *(empty)* |
+| Build Command | `node scripts/vercel-build.js` *(or leave empty — vercel.json sets it)* |
 | Output Directory | `public` |
-| Install Command | `pip install -r requirements.txt` |
-| Env var | `BOT_API_URL` = your Render/Fly URL |
+| Install Command | *(empty — no Python on Vercel)* |
+| **Environment variable** | `BOT_API_URL` = `https://ap-survey-bot.onrender.com` |
+
+No `api/` serverless functions on Vercel — the UI calls Render directly (avoids the `functions` pattern error).
 
 ---
 
