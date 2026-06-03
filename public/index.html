@@ -3,116 +3,178 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0c4a6e" />
   <title>AP Survey Bot</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="bg-pattern" aria-hidden="true"></div>
+  <div class="ambient" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="grid-overlay"></div>
+  </div>
 
-  <main class="app">
-    <header class="hero">
-      <div class="logo-ring">
-        <span class="logo-text">AP</span>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">AP</div>
+      <div class="brand-copy">
+        <span class="brand-name">Survey Bot</span>
+        <span class="brand-sub">Receipt automation</span>
       </div>
-      <h1>Survey Auto-Filler</h1>
-      <p class="tagline">Type your 21-digit code, scan your receipt with the camera, or upload a photo — we’ll detect the number for you.</p>
-    </header>
+    </div>
+    <span class="status-pill" id="statusPill">Ready</span>
+  </header>
 
-    <section class="card scan-card">
-      <span class="label">Scan receipt</span>
-      <div class="scan-actions">
-        <button type="button" id="openCameraBtn" class="btn-secondary">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-          Use camera
+  <main class="shell">
+    <section class="intro-panel">
+      <h1>Complete your survey in seconds</h1>
+      <p>Scan your receipt, confirm the 21-digit code, and let automation handle the rest.</p>
+      <ol class="steps" aria-label="How it works">
+        <li><span>1</span> Scan or upload</li>
+        <li><span>2</span> Verify code</li>
+        <li><span>3</span> Start bot</li>
+      </ol>
+    </section>
+
+    <div class="workspace">
+      <section class="panel panel-scan">
+        <div class="panel-head">
+          <div class="panel-icon scan-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
+          <div>
+            <h2>Receipt scanner</h2>
+            <p>Camera or gallery — we extract the code automatically</p>
+          </div>
+        </div>
+
+        <div class="action-grid">
+          <button type="button" id="openCameraBtn" class="action-tile">
+            <span class="tile-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </span>
+            <strong>Open camera</strong>
+            <small>Live capture</small>
+          </button>
+          <label for="photoInput" class="action-tile">
+            <span class="tile-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="M21 15l-5-5L5 21"/>
+              </svg>
+            </span>
+            <strong>Upload photo</strong>
+            <small>From gallery</small>
+          </label>
+          <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
+        </div>
+
+        <div class="scan-preview" id="scanPreview" hidden>
+          <img id="scanPreviewImg" alt="Receipt preview" />
+          <p class="scan-status" id="scanStatus"></p>
+        </div>
+      </section>
+
+      <section class="panel panel-code">
+        <div class="panel-head">
+          <div class="panel-icon code-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <rect x="3" y="5" width="18" height="14" rx="2"/>
+              <path d="M7 9h10M7 13h6"/>
+            </svg>
+          </div>
+          <div>
+            <h2>Survey code</h2>
+            <p>21 digits printed at the bottom of your receipt</p>
+          </div>
+        </div>
+
+        <label for="surveyCode" class="sr-only">Survey code</label>
+        <div class="code-field">
+          <input
+            id="surveyCode"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="Enter 21-digit code"
+            maxlength="27"
+            spellcheck="false"
+          />
+          <div class="code-meta">
+            <span class="digit-count" id="digitCount">0 / 21</span>
+            <span class="digit-bar" aria-hidden="true"><span id="digitBarFill"></span></span>
+          </div>
+        </div>
+
+        <button type="button" id="runBtn" class="btn-run">
+          <span class="btn-label">Start survey</span>
+          <span class="btn-arrow" aria-hidden="true">→</span>
+          <span class="btn-spinner" hidden aria-hidden="true"></span>
         </button>
-        <label for="photoInput" class="btn-secondary">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          Upload photo
-        </label>
-        <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
-      </div>
-      <div class="scan-preview" id="scanPreview" hidden>
-        <img id="scanPreviewImg" alt="Receipt preview" />
-        <p class="scan-status" id="scanStatus"></p>
-      </div>
-    </section>
+      </section>
 
-    <section class="card form-card">
-      <label for="surveyCode" class="label">Survey code</label>
-      <div class="input-wrap">
-        <input
-          id="surveyCode"
-          type="text"
-          inputmode="numeric"
-          autocomplete="off"
-          placeholder="21-digit code from receipt"
-          maxlength="27"
-          spellcheck="false"
-        />
-        <span class="digit-count" id="digitCount">0 / 21</span>
-      </div>
-      <p class="hint">21 digits at the bottom of your receipt — no spaces or hyphens.</p>
+      <section class="panel panel-progress" id="progressCard" hidden>
+        <div class="progress-top">
+          <h2>Running survey</h2>
+          <span class="progress-pct" id="progressPct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p class="current-step" id="currentStep">Connecting…</p>
+      </section>
 
-      <button type="button" id="runBtn" class="btn-primary">
-        <span class="btn-label">Start survey</span>
-        <span class="btn-spinner" hidden aria-hidden="true"></span>
-      </button>
-    </section>
+      <div class="result-banner" id="resultBanner" hidden role="status"></div>
 
-    <section class="card progress-card" id="progressCard" hidden>
-      <div class="progress-header">
-        <span>Progress</span>
-        <span id="progressPct">0%</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" id="progressFill"></div>
-      </div>
-      <p class="current-step" id="currentStep">Waiting to start…</p>
-    </section>
+      <figure class="screenshot-wrap" id="screenshotWrap" hidden>
+        <figcaption>Completion screenshot</figcaption>
+        <img id="screenshotImg" alt="Survey completion screenshot" />
+      </figure>
 
-    <section class="card log-card">
-      <div class="log-header">
-        <h2>Activity log</h2>
-        <button type="button" id="clearLog" class="btn-ghost">Clear</button>
-      </div>
-      <div class="log-feed" id="logFeed" role="log" aria-live="polite">
-        <p class="log-empty">No activity yet. Enter a code or scan a receipt, then press Start.</p>
-      </div>
-    </section>
-
-    <div class="result-banner" id="resultBanner" hidden role="status"></div>
-
-    <figure class="screenshot-wrap" id="screenshotWrap" hidden>
-      <img id="screenshotImg" alt="Survey completion screenshot" />
-    </figure>
+      <section class="panel panel-log">
+        <div class="log-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Live bot output</p>
+          </div>
+          <button type="button" id="clearLog" class="btn-text">Clear</button>
+        </div>
+        <div class="log-feed" id="logFeed" role="log" aria-live="polite">
+          <div class="log-empty">
+            <span class="log-empty-icon">◇</span>
+            <p>Waiting for action. Scan a receipt or enter your code.</p>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <footer class="footer">
-    <p>AP Survey Bot · Playwright automation · One code per receipt</p>
+    <p>AP Survey Bot · One code per receipt</p>
   </footer>
 
   <div class="modal" id="cameraModal" hidden role="dialog" aria-labelledby="cameraModalTitle" aria-modal="true">
     <div class="modal-backdrop" id="cameraBackdrop"></div>
     <div class="modal-panel">
-      <h2 id="cameraModalTitle" class="modal-title">Point at your receipt code</h2>
+      <div class="modal-head">
+        <h2 id="cameraModalTitle">Scan receipt code</h2>
+        <button type="button" id="closeCameraBtn" class="btn-icon" aria-label="Close">×</button>
+      </div>
       <div class="camera-wrap">
         <video id="cameraVideo" autoplay playsinline muted></video>
         <canvas id="captureCanvas" hidden></canvas>
       </div>
-      <div class="modal-actions">
-        <button type="button" id="captureBtn" class="btn-primary btn-compact">Capture &amp; scan</button>
-        <button type="button" id="closeCameraBtn" class="btn-secondary btn-compact">Cancel</button>
-      </div>
+      <button type="button" id="captureBtn" class="btn-run btn-run-modal">Capture &amp; scan</button>
     </div>
   </div>
 

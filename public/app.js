@@ -24,6 +24,10 @@ const cameraVideo = document.getElementById("cameraVideo");
 const captureCanvas = document.getElementById("captureCanvas");
 const captureBtn = document.getElementById("captureBtn");
 const closeCameraBtn = document.getElementById("closeCameraBtn");
+const statusPill = document.getElementById("statusPill");
+const digitBarFill = document.getElementById("digitBarFill");
+const photoLabel = document.querySelector('label[for="photoInput"]');
+const btnArrow = runBtn.querySelector(".btn-arrow");
 
 let running = false;
 let scanning = false;
@@ -36,13 +40,25 @@ function digitsOnly(value) {
   return value.replace(/\D/g, "");
 }
 
+function setStatusPill(text, state) {
+  if (!statusPill) return;
+  statusPill.textContent = text;
+  statusPill.className = "status-pill" + (state ? ` ${state}` : "");
+}
+
 function updateDigitCount() {
   const n = digitsOnly(surveyCode.value).length;
+  const pct = Math.min(100, Math.round((n / 21) * 100));
   digitCount.textContent = `${n} / 21`;
   digitCount.classList.toggle("ready", n === 21);
-  runBtn.disabled = running || scanning || n !== 21;
-  openCameraBtn.disabled = running || scanning;
-  photoInput.disabled = running || scanning;
+  if (digitBarFill) digitBarFill.style.width = `${pct}%`;
+  const locked = running || scanning;
+  runBtn.disabled = locked || n !== 21;
+  openCameraBtn.disabled = locked;
+  photoInput.disabled = locked;
+  openCameraBtn.classList.toggle("disabled", locked);
+  if (photoLabel) photoLabel.classList.toggle("disabled", locked);
+  if (!running && !scanning && n === 21) setStatusPill("Ready", "");
 }
 
 surveyCode.addEventListener("input", () => {
@@ -57,11 +73,17 @@ function setRunning(on) {
   surveyCode.disabled = on;
   btnLabel.textContent = on ? "Running…" : "Start survey";
   btnSpinner.hidden = !on;
+  if (btnArrow) btnArrow.hidden = on;
+  setStatusPill(on ? "Running" : "Ready", on ? "running" : "");
   updateDigitCount();
 }
 
 function clearLogFeed() {
-  logFeed.innerHTML = '<p class="log-empty">Log cleared.</p>';
+  logFeed.innerHTML = `
+    <div class="log-empty">
+      <span class="log-empty-icon">◇</span>
+      <p>Log cleared.</p>
+    </div>`;
 }
 
 function appendLog(message, level = "info") {
@@ -98,6 +120,9 @@ function showResult(status, message, screenshot, screenshotB64) {
   resultBanner.hidden = false;
   resultBanner.className = `result-banner ${status === "success" ? "success" : status === "used" || status === "stuck" ? "warn" : "error"}`;
   resultBanner.textContent = message;
+  if (status === "success") setStatusPill("Done", "success");
+  else if (status === "used" || status === "stuck") setStatusPill("Warning", "error");
+  else if (status === "error") setStatusPill("Error", "error");
 
   screenshotWrap.hidden = true;
   if (screenshotB64) {
@@ -279,6 +304,7 @@ function setScanUi(state, message) {
   scanStatus.textContent = message;
   scanStatus.className = `scan-status ${state}`;
   scanning = state === "scanning";
+  if (state === "scanning") setStatusPill("Scanning", "running");
   updateDigitCount();
 }
 
