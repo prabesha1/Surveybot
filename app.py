@@ -28,8 +28,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _public_file(name: str, media_type: str) -> FileResponse:
+    path = PUBLIC / name
+    if not path.is_file():
+        raise HTTPException(404, f"{name} not found")
+    return FileResponse(path, media_type=media_type)
+
+
 if PUBLIC.exists():
     app.mount("/static", StaticFiles(directory=PUBLIC), name="static")
+
+    @app.get("/styles.css", include_in_schema=False)
+    async def serve_styles():
+        return _public_file("styles.css", "text/css")
+
+    @app.get("/app.js", include_in_schema=False)
+    async def serve_app_js():
+        return _public_file("app.js", "application/javascript")
+
+    @app.get("/deploy.json", include_in_schema=False)
+    async def serve_deploy_json():
+        return _public_file("deploy.json", "application/json")
 
 
 class RunRequest(BaseModel):
