@@ -1,21 +1,23 @@
-"""AP Survey Bot — local dev & Railway/Render backend."""
+"""AP Survey Bot — local dev & Render backend."""
 
 import asyncio
 import json
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from storage import init_db, list_completions, save_completion
 from survey_bot import encode_screenshot, run_survey, validate_code
 
 ROOT = Path(__file__).parent
 PUBLIC = ROOT / "public"
 STATIC = ROOT / "static" if (ROOT / "static").exists() else PUBLIC
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 
 app = FastAPI(title="AP Survey Bot")
 
@@ -27,6 +29,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
 
 def _public_file(name: str, media_type: str) -> FileResponse:
     path = PUBLIC / name
@@ -55,6 +72,25 @@ class RunRequest(BaseModel):
     survey_code: str = Field(..., min_length=1)
 
 
+def _persist_run(receipt_code: str, result: dict, ip_address: str) -> dict | None:
+    """Save to SQLite; return saved row summary or None on failure."""
+    try:
+        row_id = save_completion(
+            receipt_code=receipt_code,
+            reward_code=result.get("reward_code"),
+            ip_address=ip_address,
+            status=result.get("status", "unknown"),
+        )
+        return {
+            "saved": True,
+            "id": row_id,
+            "reward_code": result.get("reward_code"),
+            "ip_address": ip_address,
+        }
+    except Exception as e:
+        return {"saved": False, "error": str(e)}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html = PUBLIC / "index.html"
@@ -68,7 +104,18 @@ async def api_config():
     return {
         "apiBase": "",
         "mode": "local",
+        "storage": True,
     }
+
+
+@app.get("/api/completions")
+async def api_completions(request: Request, limit: int = 50):
+    """List saved completions. Set ADMIN_KEY env and pass X-Admin-Key header if configured."""
+    if ADMIN_KEY:
+        key = request.headers.get("x-admin-key", "")
+        if key != ADMIN_KEY:
+            raise HTTPException(401, "Invalid or missing X-Admin-Key header")
+    return {"items": list_completions(limit=limit)}
 
 
 @app.get("/screenshots/{name}")
@@ -81,12 +128,12 @@ async def screenshot(name: str):
 
 
 @app.post("/api/run-sync")
-async def api_run_sync(body: RunRequest):
-    """JSON response for Vercel proxy / serverless backends."""
+async def api_run_sync(body: RunRequest, request: Request):
     ok, msg = validate_code(body.survey_code)
     if not ok:
         raise HTTPException(400, msg)
 
+    ip = get_client_ip(request)
     logs: list[dict] = []
 
     async def on_log(message: str, level: str = "info"):
@@ -94,6 +141,16 @@ async def api_run_sync(body: RunRequest):
 
     result = await run_survey(msg, on_log=on_log)
     screenshot_b64 = encode_screenshot(result.get("screenshot"))
+    saved = _persist_run(msg, result, ip)
+
+    if saved and saved.get("saved"):
+        logs.append(
+            {
+                "type": "log",
+                "message": f"Saved to database — reward: {saved.get('reward_code') or 'n/a'}, IP: {ip}",
+                "level": "success",
+            }
+        )
 
     return {
         "logs": logs,
@@ -101,16 +158,18 @@ async def api_run_sync(body: RunRequest):
         "message": result["message"],
         "screenshot": result.get("screenshot"),
         "screenshot_b64": screenshot_b64,
+        "reward_code": result.get("reward_code"),
+        "saved": saved,
     }
 
 
 @app.post("/api/run")
-async def api_run(body: RunRequest):
-    """SSE stream for local development."""
+async def api_run(body: RunRequest, request: Request):
     ok, msg = validate_code(body.survey_code)
     if not ok:
         raise HTTPException(400, msg)
 
+    ip = get_client_ip(request)
     queue: asyncio.Queue = asyncio.Queue()
 
     async def on_log(message: str, level: str = "info"):
@@ -119,8 +178,14 @@ async def api_run(body: RunRequest):
     async def worker():
         try:
             result = await run_survey(msg, on_log=on_log)
-            entry = {**result, "type": "done"}
+            saved = _persist_run(msg, result, ip)
+            entry = {**result, "type": "done", "saved": saved}
             entry["screenshot_b64"] = encode_screenshot(result.get("screenshot"))
+            if saved and saved.get("saved"):
+                await on_log(
+                    f"Saved — reward: {saved.get('reward_code') or 'n/a'}, IP: {ip}",
+                    "success",
+                )
             await queue.put(entry)
         except Exception as e:
             await queue.put(

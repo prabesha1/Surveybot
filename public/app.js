@@ -148,7 +148,16 @@ function processLogEntry(data) {
 function processDone(data) {
   const pct = data.status === "success" ? 100 : parseProgress(data.message) ?? 0;
   showProgress(pct, data.message);
-  showResult(data.status, data.message, data.screenshot, data.screenshot_b64);
+  let msg = data.message;
+  if (data.reward_code) {
+    msg = `Reward code: ${data.reward_code}` + (data.saved?.saved ? " · Saved with your IP & time." : "");
+  } else if (data.saved?.saved) {
+    msg += " · Run saved (time & IP recorded).";
+  }
+  showResult(data.status, msg, data.screenshot, data.screenshot_b64);
+  if (data.reward_code) {
+    appendLog(`Reward code: ${data.reward_code}`, "success");
+  }
 }
 
 async function loadDeployConfig() {

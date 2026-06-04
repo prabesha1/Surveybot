@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import os
+import re
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
@@ -21,6 +22,7 @@ def encode_screenshot(path: Optional[str]) -> Optional[str]:
         return None
     return base64.b64encode(p.read_bytes()).decode("ascii")
 
+
 SURVEY_URL = (
     "https://rbixm.qualtrics.com/jfe/form/SV_3lMYn8fpUtkEu7c"
     "?CountryCode=CAN&InviteType=Coupon&SC=21"
@@ -34,6 +36,53 @@ async def _noop_log(_msg: str, _level: str = "info") -> None:
     pass
 
 
+def extract_reward_code(body_text: str, receipt_code: str) -> Optional[str]:
+    """Try to find the validation / reward code shown on the thank-you page."""
+    receipt = receipt_code.replace("-", "").replace(" ", "").strip()
+    lines = [ln.strip() for ln in body_text.split("\n") if ln.strip()]
+    candidates: list[str] = []
+
+    code_keywords = (
+        "validation code",
+        "your code",
+        "coupon code",
+        "reward code",
+        "promo code",
+        "offer code",
+        "code is",
+        "code:",
+    )
+
+    def add_candidate(raw: str) -> None:
+        cleaned = re.sub(r"[\s\-]", "", raw).upper()
+        if len(cleaned) < 4 or len(cleaned) > 24:
+            return
+        if cleaned == receipt or receipt in cleaned:
+            return
+        if cleaned.isdigit() and len(cleaned) == 21:
+            return
+        if cleaned not in candidates:
+            candidates.append(cleaned)
+
+    for line in lines:
+        lower = line.lower()
+        if any(k in lower for k in code_keywords):
+            for m in re.finditer(r"\b([A-Z0-9][A-Z0-9\-\s]{3,22}[A-Z0-9])\b", line, re.I):
+                add_candidate(m.group(1))
+            for m in re.finditer(r"\b(\d{6,16})\b", line):
+                add_candidate(m.group(1))
+
+        for m in re.finditer(r"\b([A-Z]{2,4}[-\s]?\d{4,8}[-\s]?\d{0,8})\b", line, re.I):
+            add_candidate(m.group(1))
+
+    if not candidates:
+        for line in lines[-15:]:
+            for m in re.finditer(r"\b([A-Z0-9]{6,16})\b", line, re.I):
+                add_candidate(m.group(1))
+
+    return candidates[0] if candidates else None
+
+
 async def run_survey(
     survey_code: str,
     on_log: Optional[LogFn] = None,
@@ -42,7 +91,13 @@ async def run_survey(
 ) -> dict:
     """
     Run the survey bot. Returns status dict:
-    { "status": "success"|"used"|"stuck"|"error", "message": str, "screenshot": str|None }
+    {
+      "status": "success"|"used"|"stuck"|"error",
+      "message": str,
+      "screenshot": str|None,
+      "reward_code": str|None,
+      "page_text": str|None,
+    }
     """
     log = on_log or _noop_log
     code = survey_code.replace("-", "").replace(" ", "").strip()
@@ -50,6 +105,7 @@ async def run_survey(
     await log(f"Starting survey with code …{code[-6:]}", "info")
 
     screenshot_path: Optional[str] = None
+    final_body: Optional[str] = None
 
     try:
         async with async_playwright() as p:
@@ -131,7 +187,12 @@ async def run_survey(
 
             last_prog = 0
             stuck_count = 0
-            result = {"status": "error", "message": "Survey did not complete.", "screenshot": None}
+            result = {
+                "status": "error",
+                "message": "Survey did not complete.",
+                "screenshot": None,
+                "reward_code": None,
+            }
 
             for step in range(1, 50):
                 await page.wait_for_timeout(500)
@@ -140,6 +201,7 @@ async def run_survey(
                     "return b ? parseInt(b.getAttribute('aria-valuenow')) : 0; }"
                 )
                 body = await page.evaluate("document.body.innerText")
+                final_body = body
                 lower = body.lower()
                 lines = [
                     l.strip()
@@ -168,6 +230,7 @@ async def run_survey(
                         "status": "used",
                         "message": "Survey code already used.",
                         "screenshot": None,
+                        "reward_code": None,
                     }
                     break
 
@@ -179,13 +242,21 @@ async def run_survey(
                         "thank you for participating",
                     ]
                 ):
+                    await page.wait_for_timeout(1500)
+                    final_body = await page.evaluate("document.body.innerText")
+                    reward = extract_reward_code(final_body, code)
                     screenshot_path = str(_screenshot_dir() / "survey_done.png")
                     await page.screenshot(path=screenshot_path)
-                    await log("Survey submitted successfully!", "success")
+                    if reward:
+                        await log(f"Reward code found: {reward}", "success")
+                    else:
+                        await log("Survey done — reward code not detected on page.", "warn")
                     result = {
                         "status": "success",
-                        "message": "Survey completed.",
+                        "message": "Survey completed."
+                        + (f" Code: {reward}" if reward else ""),
                         "screenshot": screenshot_path,
+                        "reward_code": reward,
                     }
                     break
 
@@ -203,6 +274,7 @@ async def run_survey(
                         "status": "stuck",
                         "message": f"Bot stuck at {prog}%.",
                         "screenshot": screenshot_path,
+                        "reward_code": None,
                     }
                     break
 
@@ -214,7 +286,12 @@ async def run_survey(
 
     except Exception as e:
         await log(f"Error: {e}", "error")
-        return {"status": "error", "message": str(e), "screenshot": screenshot_path}
+        return {
+            "status": "error",
+            "message": str(e),
+            "screenshot": screenshot_path,
+            "reward_code": None,
+        }
 
 
 def validate_code(code: str) -> tuple[bool, str]:

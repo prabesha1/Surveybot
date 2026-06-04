@@ -102,6 +102,28 @@ playwright install chromium
 python tims_survey_bot_FINAL.py
 ```
 
+## Saved completions (SQLite)
+
+After each survey run, the app saves to a local SQLite database (`DATA_DIR/survey_bot.db`):
+
+| Field | Description |
+|-------|-------------|
+| `receipt_code` | 21-digit code you entered |
+| `reward_code` | Code detected on the thank-you page (if found) |
+| `ip_address` | Client IP (from `X-Forwarded-For` on Render) |
+| `created_at` | UTC timestamp |
+| `status` | `success`, `used`, `stuck`, or `error` |
+
+View saved rows:
+
+```bash
+curl https://ap-survey-bot.onrender.com/api/completions
+```
+
+If you set `ADMIN_KEY` on Render, pass header: `X-Admin-Key: your-secret`.
+
+**Note:** On Render free tier, the database file lives on the server disk and may reset if the service is redeployed or rebuilt. For permanent storage, add a [Render persistent disk](https://render.com/docs/disks) or use PostgreSQL.
+
 ## Project layout
 
 ```

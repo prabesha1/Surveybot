@@ -11,3 +11,6 @@ services:
     envVars:
       - key: ALLOWED_ORIGINS
         value: "*"
+      - key: DATA_DIR
+        value: /app/data
+      # Optional: set ADMIN_KEY in Render dashboard to protect /api/completions

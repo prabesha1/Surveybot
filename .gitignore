@@ -7,3 +7,5 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 public/deploy.json
+data/
+*.db
