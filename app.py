@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from debug_log import dbg
 from storage import init_db, list_completions, save_completion
 from survey_bot import encode_screenshot, run_survey, validate_code
 
@@ -38,11 +39,17 @@ def on_startup():
 
 def get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
+    real_ip = request.headers.get("x-real-ip")
     if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "unknown"
+        ip = forwarded.split(",")[0].strip()
+    elif real_ip:
+        ip = real_ip.strip()
+    elif request.client:
+        ip = request.client.host
+    else:
+        ip = "unknown"
+    dbg("app.py:get_client_ip", "resolved ip", {"ip": ip, "has_forwarded": bool(forwarded), "has_real_ip": bool(real_ip)}, "H4")
+    return ip
 
 
 def _public_file(name: str, media_type: str) -> FileResponse:
@@ -74,6 +81,15 @@ class RunRequest(BaseModel):
 
 def _persist_run(receipt_code: str, result: dict, ip_address: str) -> dict | None:
     """Save to SQLite; return saved row summary or None on failure."""
+    dbg(
+        "app.py:_persist_run",
+        "persist called",
+        {"status": result.get("status"), "reward_code": result.get("reward_code"), "ip": ip_address},
+        "H2",
+    )
+    if result.get("status") != "success":
+        dbg("app.py:_persist_run", "skip non-success", {"status": result.get("status")}, "H2")
+        return {"saved": False, "reason": "not_success"}
     try:
         row_id = save_completion(
             receipt_code=receipt_code,
@@ -81,14 +97,18 @@ def _persist_run(receipt_code: str, result: dict, ip_address: str) -> dict | Non
             ip_address=ip_address,
             status=result.get("status", "unknown"),
         )
-        return {
+        out = {
             "saved": True,
             "id": row_id,
             "reward_code": result.get("reward_code"),
             "ip_address": ip_address,
         }
+        dbg("app.py:_persist_run", "persist ok", out, "H2")
+        return out
     except Exception as e:
-        return {"saved": False, "error": str(e)}
+        err = {"saved": False, "error": str(e)}
+        dbg("app.py:_persist_run", "persist failed", err, "H2")
+        return err
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -9,6 +9,8 @@ from typing import Awaitable, Callable, Optional
 
 from playwright.async_api import async_playwright
 
+from debug_log import dbg
+
 
 def _screenshot_dir() -> Path:
     return Path(os.environ.get("TMPDIR", "/tmp"))
@@ -41,6 +43,10 @@ def extract_reward_code(body_text: str, receipt_code: str) -> Optional[str]:
     receipt = receipt_code.replace("-", "").replace(" ", "").strip()
     lines = [ln.strip() for ln in body_text.split("\n") if ln.strip()]
     candidates: list[str] = []
+    noise_words = {
+        "THANK", "SURVEY", "COMPLETE", "COMPLETED", "FEEDBACK", "PARTICIPATING",
+        "ENGLISH", "QUALTRICS", "VALIDATION", "COUPON", "REWARD", "PROMO",
+    }
 
     code_keywords = (
         "validation code",
@@ -57,6 +63,12 @@ def extract_reward_code(body_text: str, receipt_code: str) -> Optional[str]:
         cleaned = re.sub(r"[\s\-]", "", raw).upper()
         if len(cleaned) < 4 or len(cleaned) > 24:
             return
+        if not re.fullmatch(r"[A-Z0-9]+", cleaned):
+            return
+        if cleaned.isalpha():
+            return
+        if cleaned in noise_words:
+            return
         if cleaned == receipt or receipt in cleaned:
             return
         if cleaned.isdigit() and len(cleaned) == 21:
@@ -66,21 +78,40 @@ def extract_reward_code(body_text: str, receipt_code: str) -> Optional[str]:
 
     for line in lines:
         lower = line.lower()
-        if any(k in lower for k in code_keywords):
-            for m in re.finditer(r"\b([A-Z0-9][A-Z0-9\-\s]{3,22}[A-Z0-9])\b", line, re.I):
+        for kw in code_keywords:
+            if kw not in lower:
+                continue
+            idx = lower.find(kw)
+            after = line[idx + len(kw) :]
+            after = re.sub(r"^[\s:is\-]+", "", after, flags=re.I).strip().strip(".,")
+            if re.fullmatch(r"[A-Z0-9][A-Z0-9\-\s]{3,28}", after, re.I):
+                add_candidate(after.split()[0])
+            for m in re.finditer(r"\b([A-Z0-9]{4,20})\b", after, re.I):
                 add_candidate(m.group(1))
-            for m in re.finditer(r"\b(\d{6,16})\b", line):
+            for m in re.finditer(r"\b(\d{6,16})\b", after):
                 add_candidate(m.group(1))
 
-        for m in re.finditer(r"\b([A-Z]{2,4}[-\s]?\d{4,8}[-\s]?\d{0,8})\b", line, re.I):
-            add_candidate(m.group(1))
+        if any(k in lower for k in code_keywords) and len(line) <= 64:
+            for m in re.finditer(
+                r"\b([A-Z0-9]{2,4}[-\s][A-Z0-9]{3,10}[-\s]?[A-Z0-9]{0,10})\b", line, re.I
+            ):
+                add_candidate(m.group(1))
 
     if not candidates:
-        for line in lines[-15:]:
+        for line in lines[-8:]:
+            if len(line) > 40 or not re.search(r"\d", line):
+                continue
             for m in re.finditer(r"\b([A-Z0-9]{6,16})\b", line, re.I):
                 add_candidate(m.group(1))
 
-    return candidates[0] if candidates else None
+    found = candidates[0] if candidates else None
+    dbg(
+        "survey_bot.py:extract_reward_code",
+        "extract result",
+        {"found": found, "candidate_count": len(candidates), "body_len": len(body_text)},
+        "H3",
+    )
+    return found
 
 
 async def run_survey(
@@ -244,6 +275,12 @@ async def run_survey(
                 ):
                     await page.wait_for_timeout(1500)
                     final_body = await page.evaluate("document.body.innerText")
+                    dbg(
+                        "survey_bot.py:success",
+                        "thank-you page",
+                        {"body_tail": final_body[-400:] if final_body else "", "prog": prog},
+                        "H3",
+                    )
                     reward = extract_reward_code(final_body, code)
                     screenshot_path = str(_screenshot_dir() / "survey_done.png")
                     await page.screenshot(path=screenshot_path)

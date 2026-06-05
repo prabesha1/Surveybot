@@ -41,6 +41,9 @@ def _connect():
         conn.close()
 
 
+from debug_log import dbg  # noqa: E402
+
+
 def save_completion(
     *,
     receipt_code: str,
@@ -49,15 +52,22 @@ def save_completion(
     status: str,
 ) -> int:
     created_at = datetime.now(timezone.utc).isoformat()
-    with _connect() as conn:
-        cur = conn.execute(
-            """
-            INSERT INTO completions (receipt_code, reward_code, ip_address, status, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (receipt_code, reward_code, ip_address, status, created_at),
-        )
-        return int(cur.lastrowid)
+    dbg("storage.py:save_completion", "save attempt", {"db": str(DB_PATH), "status": status, "has_reward": bool(reward_code)}, "H1")
+    try:
+        with _connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO completions (receipt_code, reward_code, ip_address, status, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (receipt_code, reward_code, ip_address, status, created_at),
+            )
+            row_id = int(cur.lastrowid)
+        dbg("storage.py:save_completion", "save ok", {"row_id": row_id}, "H1")
+        return row_id
+    except Exception as e:
+        dbg("storage.py:save_completion", "save failed", {"error": str(e), "db": str(DB_PATH)}, "H1")
+        raise
 
 
 def list_completions(limit: int = 100) -> list[dict]:
