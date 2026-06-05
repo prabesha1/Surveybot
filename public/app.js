@@ -15,6 +15,7 @@ const screenshotImg = document.getElementById("screenshotImg");
 
 const openCameraBtn = document.getElementById("openCameraBtn");
 const photoInput = document.getElementById("photoInput");
+const cameraFileInput = document.getElementById("cameraFileInput");
 const scanPreview = document.getElementById("scanPreview");
 const scanPreviewImg = document.getElementById("scanPreviewImg");
 const scanStatus = document.getElementById("scanStatus");
@@ -24,6 +25,9 @@ const cameraVideo = document.getElementById("cameraVideo");
 const captureCanvas = document.getElementById("captureCanvas");
 const captureBtn = document.getElementById("captureBtn");
 const closeCameraBtn = document.getElementById("closeCameraBtn");
+const cameraStatus = document.getElementById("cameraStatus");
+const cameraError = document.getElementById("cameraError");
+const nativeCameraBtn = document.getElementById("nativeCameraBtn");
 const statusPill = document.getElementById("statusPill");
 const digitBarFill = document.getElementById("digitBarFill");
 const photoLabel = document.querySelector('label[for="photoInput"]');
@@ -56,6 +60,7 @@ function updateDigitCount() {
   runBtn.disabled = locked || n !== 21;
   openCameraBtn.disabled = locked;
   photoInput.disabled = locked;
+  if (cameraFileInput) cameraFileInput.disabled = locked;
   openCameraBtn.classList.toggle("disabled", locked);
   if (photoLabel) photoLabel.classList.toggle("disabled", locked);
   if (!running && !scanning && n === 21) setStatusPill("Ready", "");
@@ -368,11 +373,8 @@ function loadImageFromFile(file) {
   });
 }
 
-photoInput.addEventListener("change", async () => {
-  const file = photoInput.files?.[0];
-  photoInput.value = "";
+async function handlePhotoFile(file) {
   if (!file || running) return;
-
   try {
     const { img, url } = await loadImageFromFile(file);
     await scanImage(img, url);
@@ -380,15 +382,60 @@ photoInput.addEventListener("change", async () => {
     setScanUi("error", e.message);
     appendLog(e.message, "error");
   }
+}
+
+photoInput.addEventListener("change", async () => {
+  const file = photoInput.files?.[0];
+  photoInput.value = "";
+  await handlePhotoFile(file);
 });
 
-async function startCamera() {
-  cameraStream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
-    audio: false,
+if (cameraFileInput) {
+  cameraFileInput.addEventListener("change", async () => {
+    const file = cameraFileInput.files?.[0];
+    cameraFileInput.value = "";
+    closeCameraModal();
+    await handlePhotoFile(file);
   });
-  cameraVideo.srcObject = cameraStream;
-  await cameraVideo.play();
+}
+
+function setCameraStatus(text) {
+  if (cameraStatus) cameraStatus.textContent = text;
+}
+
+function showCameraError(text) {
+  if (!cameraError) return;
+  cameraError.textContent = text;
+  cameraError.hidden = !text;
+}
+
+function canUseLiveCamera() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+async function startCamera() {
+  const attempts = [
+    { video: { facingMode: { exact: "environment" } }, audio: false },
+    { video: { facingMode: "environment" }, audio: false },
+    { video: { facingMode: "user" }, audio: false },
+    { video: true, audio: false },
+  ];
+
+  let lastError = null;
+  for (const constraints of attempts) {
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+      cameraVideo.srcObject = cameraStream;
+      await cameraVideo.play();
+      setCameraStatus("Point at the receipt code, then tap Capture.");
+      showCameraError("");
+      if (nativeCameraBtn) nativeCameraBtn.hidden = true;
+      return;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error("Camera not available");
 }
 
 function stopCamera() {
@@ -408,22 +455,43 @@ function closeCameraModal() {
   cameraModal.hidden = true;
   document.body.style.overflow = "";
   stopCamera();
+  showCameraError("");
+  if (nativeCameraBtn) nativeCameraBtn.hidden = true;
+}
+
+function openNativeCamera() {
+  if (cameraFileInput) cameraFileInput.click();
 }
 
 openCameraBtn.addEventListener("click", async () => {
   if (running || scanning) return;
+
+  if (!canUseLiveCamera()) {
+    openNativeCamera();
+    return;
+  }
+
   openCameraModal();
+  setCameraStatus("Starting camera…");
+  showCameraError("");
+  if (captureBtn) captureBtn.disabled = false;
+
   try {
     await startCamera();
   } catch (e) {
-    closeCameraModal();
-    appendLog("Camera access denied or unavailable.", "error");
-    setScanUi("error", "Allow camera access or upload a photo instead.");
+    setCameraStatus("Live camera unavailable");
+    showCameraError("Allow camera access in your browser, or use the button below.");
+    if (nativeCameraBtn) nativeCameraBtn.hidden = false;
+    if (captureBtn) captureBtn.disabled = true;
+    appendLog("Live camera unavailable — use native camera or upload from gallery.", "warn");
+    scanPreview.hidden = false;
+    setScanUi("error", "Live camera blocked. Tap “Use phone camera instead” or upload from gallery.");
   }
 });
 
 closeCameraBtn.addEventListener("click", closeCameraModal);
 cameraBackdrop.addEventListener("click", closeCameraModal);
+if (nativeCameraBtn) nativeCameraBtn.addEventListener("click", openNativeCamera);
 
 captureBtn.addEventListener("click", async () => {
   if (!cameraStream) return;

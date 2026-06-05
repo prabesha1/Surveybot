@@ -825,6 +825,38 @@ body {
   background: var(--sky-100);
 }
 
+.camera-status {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--slate-600);
+  text-align: center;
+}
+
+.camera-error {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-sm);
+}
+
+.btn-run-alt {
+  margin-top: 0.5rem;
+  background: var(--white);
+  color: var(--sky-700);
+  border: 2px solid var(--sky-200);
+  box-shadow: none;
+}
+
+.btn-run-alt:hover:not(:disabled) {
+  background: var(--sky-50);
+  box-shadow: none;
+}
+
 .camera-wrap {
   border-radius: var(--radius);
   overflow: hidden;

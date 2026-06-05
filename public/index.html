@@ -76,7 +76,8 @@
             <strong>Upload photo</strong>
             <small>From gallery</small>
           </label>
-          <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
+          <input type="file" id="photoInput" accept="image/*" hidden />
+          <input type="file" id="cameraFileInput" accept="image/*" capture="environment" hidden />
         </div>
 
         <div class="scan-preview" id="scanPreview" hidden>
@@ -170,11 +171,14 @@
         <h2 id="cameraModalTitle">Scan receipt code</h2>
         <button type="button" id="closeCameraBtn" class="btn-icon" aria-label="Close">×</button>
       </div>
+      <p class="camera-status" id="cameraStatus">Starting camera…</p>
       <div class="camera-wrap">
         <video id="cameraVideo" autoplay playsinline muted></video>
         <canvas id="captureCanvas" hidden></canvas>
       </div>
+      <p class="camera-error" id="cameraError" hidden></p>
       <button type="button" id="captureBtn" class="btn-run btn-run-modal">Capture &amp; scan</button>
+      <button type="button" id="nativeCameraBtn" class="btn-run btn-run-modal btn-run-alt" hidden>Use phone camera instead</button>
     </div>
   </div>
 
