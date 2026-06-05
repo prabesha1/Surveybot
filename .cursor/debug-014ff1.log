@@ -1,0 +1,5 @@
+{"sessionId": "014ff1", "runId": "pre-fix", "hypothesisId": "H4", "location": "app.py:get_client_ip", "message": "resolved ip", "data": {"ip": "203.0.113.42", "has_forwarded": true, "has_real_ip": false}, "timestamp": 1780678778431}
+{"sessionId": "014ff1", "runId": "pre-fix", "hypothesisId": "H2", "location": "app.py:_persist_run", "message": "persist called", "data": {"status": "success", "reward_code": "REWARD99", "ip": "203.0.113.42"}, "timestamp": 1780678778431}
+{"sessionId": "014ff1", "runId": "pre-fix", "hypothesisId": "H1", "location": "storage.py:save_completion", "message": "save attempt", "data": {"db": "data/survey_bot.db", "status": "success", "has_reward": true}, "timestamp": 1780678778431}
+{"sessionId": "014ff1", "runId": "pre-fix", "hypothesisId": "H1", "location": "storage.py:save_completion", "message": "save ok", "data": {"row_id": 3}, "timestamp": 1780678778433}
+{"sessionId": "014ff1", "runId": "pre-fix", "hypothesisId": "H2", "location": "app.py:_persist_run", "message": "persist ok", "data": {"saved": true, "id": 3, "reward_code": "REWARD99", "ip_address": "203.0.113.42"}, "timestamp": 1780678778433}

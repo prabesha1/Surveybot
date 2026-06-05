@@ -11,7 +11,6 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from debug_log import dbg
 from storage import init_db, list_completions, save_completion
 from survey_bot import encode_screenshot, run_survey, validate_code
 
@@ -48,7 +47,6 @@ def get_client_ip(request: Request) -> str:
         ip = request.client.host
     else:
         ip = "unknown"
-    dbg("app.py:get_client_ip", "resolved ip", {"ip": ip, "has_forwarded": bool(forwarded), "has_real_ip": bool(real_ip)}, "H4")
     return ip
 
 
@@ -81,14 +79,7 @@ class RunRequest(BaseModel):
 
 def _persist_run(receipt_code: str, result: dict, ip_address: str) -> dict | None:
     """Save to SQLite; return saved row summary or None on failure."""
-    dbg(
-        "app.py:_persist_run",
-        "persist called",
-        {"status": result.get("status"), "reward_code": result.get("reward_code"), "ip": ip_address},
-        "H2",
-    )
     if result.get("status") != "success":
-        dbg("app.py:_persist_run", "skip non-success", {"status": result.get("status")}, "H2")
         return {"saved": False, "reason": "not_success"}
     try:
         row_id = save_completion(
@@ -97,18 +88,14 @@ def _persist_run(receipt_code: str, result: dict, ip_address: str) -> dict | Non
             ip_address=ip_address,
             status=result.get("status", "unknown"),
         )
-        out = {
+        return {
             "saved": True,
             "id": row_id,
             "reward_code": result.get("reward_code"),
             "ip_address": ip_address,
         }
-        dbg("app.py:_persist_run", "persist ok", out, "H2")
-        return out
     except Exception as e:
-        err = {"saved": False, "error": str(e)}
-        dbg("app.py:_persist_run", "persist failed", err, "H2")
-        return err
+        return {"saved": False, "error": str(e)}
 
 
 @app.get("/", response_class=HTMLResponse)

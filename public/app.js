@@ -146,21 +146,6 @@ function processLogEntry(data) {
 }
 
 function processDone(data) {
-  // #region agent log
-  fetch("http://127.0.0.1:7898/ingest/1898c8cf-ea8d-4905-a86c-00b33b498270", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "014ff1" },
-    body: JSON.stringify({
-      sessionId: "014ff1",
-      runId: "pre-fix",
-      hypothesisId: "H5",
-      location: "app.js:processDone",
-      message: "done payload",
-      data: { status: data.status, reward_code: data.reward_code, saved: data.saved },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   const pct = data.status === "success" ? 100 : parseProgress(data.message) ?? 0;
   showProgress(pct, data.message);
   let msg = data.message;

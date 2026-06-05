@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements-server.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY survey_bot.py app.py storage.py debug_log.py ./
+COPY survey_bot.py app.py storage.py ./
 COPY public ./public
 
 ENV PORT=8000

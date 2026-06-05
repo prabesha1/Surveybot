@@ -9,9 +9,6 @@ from typing import Awaitable, Callable, Optional
 
 from playwright.async_api import async_playwright
 
-from debug_log import dbg
-
-
 def _screenshot_dir() -> Path:
     return Path(os.environ.get("TMPDIR", "/tmp"))
 
@@ -104,14 +101,7 @@ def extract_reward_code(body_text: str, receipt_code: str) -> Optional[str]:
             for m in re.finditer(r"\b([A-Z0-9]{6,16})\b", line, re.I):
                 add_candidate(m.group(1))
 
-    found = candidates[0] if candidates else None
-    dbg(
-        "survey_bot.py:extract_reward_code",
-        "extract result",
-        {"found": found, "candidate_count": len(candidates), "body_len": len(body_text)},
-        "H3",
-    )
-    return found
+    return candidates[0] if candidates else None
 
 
 async def run_survey(
@@ -275,12 +265,6 @@ async def run_survey(
                 ):
                     await page.wait_for_timeout(1500)
                     final_body = await page.evaluate("document.body.innerText")
-                    dbg(
-                        "survey_bot.py:success",
-                        "thank-you page",
-                        {"body_tail": final_body[-400:] if final_body else "", "prog": prog},
-                        "H3",
-                    )
                     reward = extract_reward_code(final_body, code)
                     screenshot_path = str(_screenshot_dir() / "survey_done.png")
                     await page.screenshot(path=screenshot_path)
