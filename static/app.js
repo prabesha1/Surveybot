@@ -127,7 +127,7 @@ function extractSurveyCode(text) {
     }
   }
 
-  const unique = [...new Set(candidates.filter((c) => c.length === 21 && /^\d{21}$/.test(c))];
+  const unique = [...new Set(candidates.filter((c) => c.length === 21 && /^\d{21}$/.test(c)))];
   if (unique.length === 1) return unique[0];
   if (unique.length > 1) {
     return unique.find((c) => !c.startsWith("000")) || unique[0];
