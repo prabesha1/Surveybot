@@ -1,0 +1,9 @@
+{
+  "name": "ap-survey-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AP Survey Bot static frontend (Vercel). Backend runs on Render.",
+  "scripts": {
+    "build": "node scripts/vercel-build.js"
+  }
+}

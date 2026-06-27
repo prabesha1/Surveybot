@@ -5,7 +5,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const apiBase = (process.env.BOT_API_URL || "").replace(/\/$/, "");
+const DEFAULT_BACKEND = "https://ap-survey-bot.onrender.com";
+const apiBase = (process.env.BOT_API_URL || DEFAULT_BACKEND).replace(/\/$/, "");
 const out = path.join(__dirname, "..", "public", "deploy.json");
 
 fs.writeFileSync(
