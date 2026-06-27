@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import os
+import random
 import re
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
@@ -27,6 +28,64 @@ SURVEY_URL = (
     "?CountryCode=CAN&InviteType=Coupon&SC=21"
 )
 NO_KEYWORDS = ["problem", "merchandise", "retail", "buy a retail", "purchased"]
+
+# Common Canadian first/last names for a genuine-looking persona per run.
+CA_FIRST_NAMES = [
+    "Liam", "Noah", "Oliver", "William", "Benjamin", "Lucas", "Henry", "Jack",
+    "Owen", "Ethan", "Nathan", "Logan", "Hudson", "Theodore", "Jacob", "Connor",
+    "Emma", "Olivia", "Charlotte", "Ava", "Sophia", "Amelia", "Isla", "Mia",
+    "Grace", "Ella", "Chloe", "Aria", "Hannah", "Abigail", "Emily", "Madison",
+    "Ryan", "Daniel", "Matthew", "Adam", "Cole", "Carter", "Mason", "Aiden",
+    "Sarah", "Hailey", "Brooke", "Lauren", "Paige", "Maya", "Zoe", "Lily",
+]
+CA_LAST_NAMES = [
+    "Smith", "Brown", "Tremblay", "Martin", "Roy", "Wilson", "MacDonald", "Gagnon",
+    "Johnson", "Taylor", "Campbell", "Anderson", "Lavoie", "Cote", "Bouchard",
+    "Williams", "Thompson", "Clarke", "Bergeron", "Pelletier", "Morin", "Lee",
+    "Patel", "Singh", "Nguyen", "Chen", "Wong", "Murphy", "Scott", "Reid",
+    "Bélanger", "Girard", "Fortin", "Cameron", "Stewart", "Ross", "Robinson",
+]
+EMAIL_DOMAINS = ["gmail.com", "outlook.com", "yahoo.ca", "hotmail.com", "icloud.com"]
+
+# Varied "highly satisfied" comments so submissions are never identical.
+POSITIVE_COMMENTS = [
+    "Excellent service, the staff were friendly and quick. Highly satisfied!",
+    "Everything was perfect, fresh and fast. I'm very happy with my visit.",
+    "Super friendly team and my order was exactly right. Couldn't be happier.",
+    "Great experience as always — clean store and warm, fast service.",
+    "The staff went above and beyond. Coffee was hot and fresh, loved it.",
+    "Quick, polite service and a spotless location. Highly recommend.",
+    "Amazing visit! Order was accurate and the staff were so welcoming.",
+    "Very satisfied — friendly service, fresh food, and no wait at all.",
+    "Top-notch service today. The team was cheerful and efficient.",
+    "Wonderful experience, everything was fresh and the staff were lovely.",
+]
+SHORT_POSITIVES = [
+    "Great service!",
+    "Very satisfied!",
+    "Excellent visit!",
+    "Friendly and fast!",
+    "Loved it!",
+]
+
+
+def make_persona() -> dict:
+    """Generate a unique, genuine-looking Canadian persona for one survey run."""
+    first = random.choice(CA_FIRST_NAMES)
+    last = random.choice(CA_LAST_NAMES)
+    # Strip accents for the email local-part so it stays valid.
+    local_first = re.sub(r"[^a-z]", "", first.lower())
+    local_last = re.sub(r"[^a-z]", "", last.lower())
+    sep = random.choice([".", "_", ""])
+    num = random.randint(7, 9899)
+    email = f"{local_first}{sep}{local_last}{num}@{random.choice(EMAIL_DOMAINS)}"
+    return {
+        "first": first,
+        "last": last,
+        "full": f"{first} {last}",
+        "email": email,
+    }
+
 
 LogFn = Callable[[str, str], Awaitable[None]]  # (message, level)
 
@@ -122,30 +181,54 @@ async def run_survey(
     """
     log = on_log or _noop_log
     code = survey_code.replace("-", "").replace(" ", "").strip()
+    persona = make_persona()
 
     await log(f"Starting survey with code …{code[-6:]}", "info")
+    await log(f"Persona: {persona['full']} <{persona['email']}>", "info")
 
     screenshot_path: Optional[str] = None
     final_body: Optional[str] = None
 
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=headless, slow_mo=150)
+            browser = await p.chromium.launch(
+                headless=headless,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-extensions",
+                ],
+            )
             page = await (await browser.new_context()).new_page()
             page.set_default_timeout(20000)
 
-            await page.goto(SURVEY_URL)
-            await page.wait_for_timeout(2000)
+            await page.goto(SURVEY_URL, wait_until="domcontentloaded")
+            await page.wait_for_selector("input[id='QR~QID9']", timeout=20000)
             await page.fill("input[id='QR~QID9']", code)
-            await page.wait_for_timeout(300)
 
             async def next_js():
+                prev = await page.evaluate(
+                    "() => { const b = document.querySelector('[aria-valuenow]'); "
+                    "return b ? b.getAttribute('aria-valuenow') : null; }"
+                )
                 await page.evaluate(
                     "() => { const b = document.getElementById('NextButton') "
                     "|| document.querySelector('input[type=\"submit\"]'); "
                     "if(b) b.click(); }"
                 )
-                await page.wait_for_timeout(2500)
+                # Wait until the page actually advances (progress changes) instead
+                # of a fixed long sleep — much faster on quick-loading pages.
+                try:
+                    await page.wait_for_function(
+                        "(prev) => { const b = document.querySelector('[aria-valuenow]'); "
+                        "const cur = b ? b.getAttribute('aria-valuenow') : null; "
+                        "return cur !== prev; }",
+                        arg=prev,
+                        timeout=4000,
+                    )
+                except Exception:
+                    await page.wait_for_timeout(600)
 
             async def smart_answer(page_text):
                 lower = page_text.lower()
@@ -189,18 +272,43 @@ async def run_survey(
 
                 for ta in await page.query_selector_all("textarea"):
                     if await ta.is_visible() and not await ta.input_value():
-                        await ta.fill("Great service, friendly staff, very satisfied!")
+                        await ta.fill(random.choice(POSITIVE_COMMENTS))
+
                 for inp in await page.query_selector_all(
                     "input[type='text'],input[type='TEXT']"
                 ):
-                    if await inp.is_visible():
-                        id_ = await inp.get_attribute("id") or ""
-                        if "QID9" not in id_ and not await inp.input_value():
-                            await inp.fill("Great service!")
+                    if not await inp.is_visible():
+                        continue
+                    id_ = await inp.get_attribute("id") or ""
+                    if "QID9" in id_ or await inp.input_value():
+                        continue
+                    meta = " ".join(
+                        filter(
+                            None,
+                            [
+                                id_,
+                                await inp.get_attribute("name") or "",
+                                await inp.get_attribute("placeholder") or "",
+                                await inp.get_attribute("aria-label") or "",
+                            ],
+                        )
+                    ).lower()
+                    if "email" in meta:
+                        await inp.fill(persona["email"])
+                    elif "first" in meta and "name" in meta:
+                        await inp.fill(persona["first"])
+                    elif "last" in meta and "name" in meta:
+                        await inp.fill(persona["last"])
+                    elif "name" in meta:
+                        await inp.fill(persona["full"])
+                    else:
+                        await inp.fill(random.choice(SHORT_POSITIVES))
+
+                # Email field: fill a genuine-looking unique address only when present.
                 try:
                     el = await page.query_selector("input[type='email']")
                     if el and await el.is_visible() and not await el.input_value():
-                        await el.fill("skip@example.com")
+                        await el.fill(persona["email"])
                 except Exception:
                     pass
 
@@ -216,7 +324,7 @@ async def run_survey(
             }
 
             for step in range(1, 50):
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(250)
                 prog = await page.evaluate(
                     "() => { const b = document.querySelector('[aria-valuenow]'); "
                     "return b ? parseInt(b.getAttribute('aria-valuenow')) : 0; }"
