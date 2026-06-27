@@ -3,9 +3,11 @@ static/
 *.png
 __pycache__/
 .env
+api/
 Dockerfile
 render.yaml
 fly.toml
+storage.py
 tims_survey_bot_FINAL.py
 survey_bot.py
 app.py
