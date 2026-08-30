@@ -27,25 +27,18 @@ SURVEY_URL = (
     "https://rbixm.qualtrics.com/jfe/form/SV_3lMYn8fpUtkEu7c"
     "?CountryCode=CAN&InviteType=Coupon&SC=21"
 )
-NO_KEYWORDS = ["problem", "merchandise", "retail", "buy a retail", "purchased"]
-
-# Common Canadian first/last names for a genuine-looking persona per run.
-CA_FIRST_NAMES = [
-    "Liam", "Noah", "Oliver", "William", "Benjamin", "Lucas", "Henry", "Jack",
-    "Owen", "Ethan", "Nathan", "Logan", "Hudson", "Theodore", "Jacob", "Connor",
-    "Emma", "Olivia", "Charlotte", "Ava", "Sophia", "Amelia", "Isla", "Mia",
-    "Grace", "Ella", "Chloe", "Aria", "Hannah", "Abigail", "Emily", "Madison",
-    "Ryan", "Daniel", "Matthew", "Adam", "Cole", "Carter", "Mason", "Aiden",
-    "Sarah", "Hailey", "Brooke", "Lauren", "Paige", "Maya", "Zoe", "Lily",
+# Questions to answer with the SECOND option (typically "No"): decline problems,
+# retail purchases, and the sweepstakes / team-member recognition so the run stays
+# quick and doesn't require entering any personal contact info.
+NO_KEYWORDS = [
+    "problem",
+    "merchandise",
+    "retail",
+    "buy a retail",
+    "purchased",
+    "sweepstakes",
+    "recognize a team member",
 ]
-CA_LAST_NAMES = [
-    "Smith", "Brown", "Tremblay", "Martin", "Roy", "Wilson", "MacDonald", "Gagnon",
-    "Johnson", "Taylor", "Campbell", "Anderson", "Lavoie", "Cote", "Bouchard",
-    "Williams", "Thompson", "Clarke", "Bergeron", "Pelletier", "Morin", "Lee",
-    "Patel", "Singh", "Nguyen", "Chen", "Wong", "Murphy", "Scott", "Reid",
-    "Bélanger", "Girard", "Fortin", "Cameron", "Stewart", "Ross", "Robinson",
-]
-EMAIL_DOMAINS = ["gmail.com", "outlook.com", "yahoo.ca", "hotmail.com", "icloud.com"]
 
 # Varied "highly satisfied" comments so submissions are never identical.
 POSITIVE_COMMENTS = [
@@ -67,24 +60,6 @@ SHORT_POSITIVES = [
     "Friendly and fast!",
     "Loved it!",
 ]
-
-
-def make_persona() -> dict:
-    """Generate a unique, genuine-looking Canadian persona for one survey run."""
-    first = random.choice(CA_FIRST_NAMES)
-    last = random.choice(CA_LAST_NAMES)
-    # Strip accents for the email local-part so it stays valid.
-    local_first = re.sub(r"[^a-z]", "", first.lower())
-    local_last = re.sub(r"[^a-z]", "", last.lower())
-    sep = random.choice([".", "_", ""])
-    num = random.randint(7, 9899)
-    email = f"{local_first}{sep}{local_last}{num}@{random.choice(EMAIL_DOMAINS)}"
-    return {
-        "first": first,
-        "last": last,
-        "full": f"{first} {last}",
-        "email": email,
-    }
 
 
 LogFn = Callable[[str, str], Awaitable[None]]  # (message, level)
@@ -181,10 +156,8 @@ async def run_survey(
     """
     log = on_log or _noop_log
     code = survey_code.replace("-", "").replace(" ", "").strip()
-    persona = make_persona()
 
     await log(f"Starting survey with code …{code[-6:]}", "info")
-    await log(f"Persona: {persona['full']} <{persona['email']}>", "info")
 
     screenshot_path: Optional[str] = None
     final_body: Optional[str] = None
@@ -301,24 +274,12 @@ async def run_survey(
                             ],
                         )
                     ).lower()
-                    if "email" in meta:
-                        await inp.fill(persona["email"])
-                    elif "first" in meta and "name" in meta:
-                        await inp.fill(persona["first"])
-                    elif "last" in meta and "name" in meta:
-                        await inp.fill(persona["last"])
-                    elif "name" in meta:
-                        await inp.fill(persona["full"])
-                    else:
-                        await inp.fill(random.choice(SHORT_POSITIVES))
-
-                # Email field: fill a genuine-looking unique address only when present.
-                try:
-                    el = await page.query_selector("input[type='email']")
-                    if el and await el.is_visible() and not await el.input_value():
-                        await el.fill(persona["email"])
-                except Exception:
-                    pass
+                    # Leave personal contact fields (name / email) blank — we decline
+                    # the sweepstakes, so no real customer would enter these. Only
+                    # generic feedback text boxes get a short positive note.
+                    if "email" in meta or "name" in meta:
+                        continue
+                    await inp.fill(random.choice(SHORT_POSITIVES))
 
             await next_js()
 
