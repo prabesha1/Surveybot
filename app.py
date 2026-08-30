@@ -19,7 +19,7 @@ PUBLIC = ROOT / "public"
 STATIC = ROOT / "static" if (ROOT / "static").exists() else PUBLIC
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 
-app = FastAPI(title="AP Survey Bot")
+app = FastAPI(title="Prabesh Tims Bot")
 
 allowed = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
