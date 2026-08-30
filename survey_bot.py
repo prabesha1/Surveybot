@@ -257,15 +257,23 @@ async def run_survey(
                     """() => {
                     const groups = {};
                     document.querySelectorAll('input[type="checkbox"]').forEach(inp => {
-                        if (!groups[inp.name]) groups[inp.name] = [];
-                        groups[inp.name].push(inp);
+                        const key = inp.name || '__nogroup__';
+                        if (!groups[key]) groups[key] = [];
+                        groups[key].push(inp);
                     });
+                    const selectOne = (el) => {
+                        el.checked = true;
+                        ['mousedown','mouseup','click'].forEach(e =>
+                            el.dispatchEvent(new MouseEvent(e, {bubbles:true})));
+                        el.dispatchEvent(new Event('change', {bubbles:true}));
+                        const lbl = document.querySelector('label[for="'+el.id+'"]');
+                        if (lbl) lbl.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+                    };
                     Object.values(groups).forEach(grp => {
-                        if (!grp[0].checked) {
-                            grp[0].checked = true;
-                            grp[0].dispatchEvent(new Event('change', {bubbles:true}));
-                            grp[0].dispatchEvent(new MouseEvent('click', {bubbles:true}));
-                        }
+                        // Named groups: pick the first option. The "__nogroup__"
+                        // bucket is a "check all that apply" list where each box is
+                        // independent — selecting the first choice satisfies it.
+                        if (!grp.some(c => c.checked)) selectOne(grp[0]);
                     });
                 }"""
                 )
@@ -363,27 +371,49 @@ async def run_survey(
                     }
                     break
 
-                if prog == 100 or any(
-                    k in lower
+                # The welcome/intro page contains "as a thank you for completing
+                # the survey…", which must NOT be treated as completion. Strip that
+                # clause and ignore the intro page before checking for the real
+                # thank-you page.
+                lower_for_done = re.sub(r"as a thank you[^.]*", "", lower)
+                on_intro = "welcome to the tell tims survey" in lower
+                done_by_text = any(
+                    k in lower_for_done
                     for k in [
-                        "thank you for completing",
+                        "thank you for completing the survey",
                         "thank you for your feedback",
                         "thank you for participating",
+                        "your validation code",
                     ]
-                ):
+                )
+                if not on_intro and (prog == 100 or done_by_text):
                     await page.wait_for_timeout(1500)
                     final_body = await page.evaluate("document.body.innerText")
                     reward = extract_reward_code(final_body, code)
                     screenshot_path = str(_screenshot_dir() / "survey_done.png")
                     await page.screenshot(path=screenshot_path)
+                    # Some Tims surveys give an instant validation/coupon code;
+                    # the current contest version only enters a sweepstakes and
+                    # shows no code — that's still a successful completion.
+                    fdl = final_body.lower()
+                    is_sweepstakes = any(
+                        k in fdl for k in ["sweepstakes", "no purchase necessary", "contest runs"]
+                    )
                     if reward:
                         await log(f"Reward code found: {reward}", "success")
+                        done_msg = f"Survey completed. Code: {reward}"
+                    elif is_sweepstakes:
+                        await log(
+                            "Survey completed — this survey enters a sweepstakes (no instant code).",
+                            "success",
+                        )
+                        done_msg = "Survey completed — entered the sweepstakes (no instant code for this survey)."
                     else:
                         await log("Survey done — reward code not detected on page.", "warn")
+                        done_msg = "Survey completed."
                     result = {
                         "status": "success",
-                        "message": "Survey completed."
-                        + (f" Code: {reward}" if reward else ""),
+                        "message": done_msg,
                         "screenshot": screenshot_path,
                         "reward_code": reward,
                     }
