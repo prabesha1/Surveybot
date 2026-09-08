@@ -12,8 +12,8 @@ from typing import Optional
 # In production, override these by setting the AUTH_USERS env var to JSON, e.g.
 #   AUTH_USERS='[{"username":"ironman","password":"something-better"}]'
 _BUILTIN_USERS = [
-    {"username": "ironman", "password": "ironman"},
-    {"username": "Ajaya Purja", "password": "jandapurja555"},
+    {"username": "ironman", "password": "ironman", "role": "admin"},
+    {"username": "Ajaya Purja", "password": "jandapurja555", "role": "user"},
 ]
 
 
@@ -50,30 +50,33 @@ def _sign(payload: str) -> str:
     return hmac.new(_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def authenticate(username: str, password: str) -> Optional[str]:
-    """Return the canonical username when credentials match, otherwise None."""
+def authenticate(username: str, password: str) -> Optional[dict]:
+    """Return {"username", "role"} when credentials match, otherwise None."""
     candidate = (username or "").strip().lower()
     supplied = password or ""
 
-    matched: Optional[str] = None
+    matched: Optional[dict] = None
     for user in USERS:
         # Check every user without short-circuiting so a wrong username takes
         # the same time as a wrong password.
         name_ok = hmac.compare_digest(str(user["username"]).lower(), candidate)
         pass_ok = hmac.compare_digest(str(user["password"]), supplied)
         if name_ok and pass_ok:
-            matched = str(user["username"])
+            matched = {
+                "username": str(user["username"]),
+                "role": str(user.get("role", "user")),
+            }
     return matched
 
 
-def create_token(username: str) -> str:
-    payload = {"u": username, "exp": int(time.time()) + TOKEN_TTL}
+def create_token(username: str, role: str = "user") -> str:
+    payload = {"u": username, "r": role, "exp": int(time.time()) + TOKEN_TTL}
     encoded = _b64encode(json.dumps(payload, separators=(",", ":")).encode())
     return f"{encoded}.{_sign(encoded)}"
 
 
-def verify_token(token: str) -> Optional[str]:
-    """Return the username carried by a valid, unexpired token."""
+def verify_token(token: str) -> Optional[dict]:
+    """Return {"username", "role"} carried by a valid, unexpired token."""
     if not token or "." not in token:
         return None
     encoded, _, signature = token.partition(".")
@@ -85,4 +88,7 @@ def verify_token(token: str) -> Optional[str]:
         return None
     if int(payload.get("exp", 0)) < time.time():
         return None
-    return payload.get("u")
+    username = payload.get("u")
+    if not username:
+        return None
+    return {"username": username, "role": payload.get("r", "user")}

@@ -73,3 +73,41 @@ def list_completions(limit: int = 100) -> list[dict]:
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def completion_stats() -> dict:
+    """Totals for the admin dashboard."""
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                COUNT(reward_code) AS with_reward,
+                COUNT(DISTINCT ip_address) AS unique_ips,
+                MAX(created_at) AS last_run
+            FROM completions
+            """
+        ).fetchone()
+        today = conn.execute(
+            "SELECT COUNT(*) AS n FROM completions WHERE substr(created_at, 1, 10) = ?",
+            (datetime.now(timezone.utc).date().isoformat(),),
+        ).fetchone()
+    return {
+        "total": row["total"] or 0,
+        "with_reward": row["with_reward"] or 0,
+        "unique_ips": row["unique_ips"] or 0,
+        "last_run": row["last_run"],
+        "today": today["n"] or 0,
+    }
+
+
+def delete_completion(row_id: int) -> bool:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM completions WHERE id = ?", (row_id,))
+        return cur.rowcount > 0
+
+
+def clear_completions() -> int:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM completions")
+        return cur.rowcount

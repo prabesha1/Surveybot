@@ -105,8 +105,33 @@
       </div>
     </header>
 
+    <nav class="viewnav" id="viewNav" aria-label="Sections">
+      <button type="button" class="nav-btn active" data-view="single">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h10M7 14h5"/>
+        </svg>
+        Single
+      </button>
+      <button type="button" class="nav-btn" data-view="bulk">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="4" rx="1"/>
+          <rect x="3" y="10" width="18" height="4" rx="1"/>
+          <rect x="3" y="16" width="18" height="4" rx="1"/>
+        </svg>
+        Bulk
+        <span class="nav-badge">5</span>
+      </button>
+      <button type="button" class="nav-btn" data-view="admin" id="adminTab" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 3l7 4v5c0 4.4-3 8.3-7 9-4-0.7-7-4.6-7-9V7z"/><path d="M9.5 12l1.8 1.8 3.4-3.6"/>
+        </svg>
+        Admin
+      </button>
+    </nav>
+
     <main class="shell">
-      <div class="workspace">
+      <!-- ============ SINGLE ============ -->
+      <div class="workspace view" id="viewSingle">
         <section class="panel panel-code">
           <div class="panel-head">
             <div class="panel-icon code-icon" aria-hidden="true">
@@ -162,23 +187,110 @@
           <figcaption>Completion screenshot</figcaption>
           <img id="screenshotImg" alt="Survey completion screenshot" />
         </figure>
+      </div>
 
-        <section class="panel panel-log">
-          <div class="log-head">
+      <!-- ============ BULK ============ -->
+      <div class="workspace view" id="viewBulk" hidden>
+        <section class="panel panel-bulk">
+          <div class="panel-head">
+            <div class="panel-icon bulk-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <rect x="3" y="4" width="18" height="4" rx="1"/>
+                <rect x="3" y="10" width="18" height="4" rx="1"/>
+                <rect x="3" y="16" width="18" height="4" rx="1"/>
+              </svg>
+            </div>
             <div>
-              <h2>Activity</h2>
-              <p>Live bot output</p>
+              <h2>Bulk run · up to 5</h2>
+              <p>Paste all five codes at once — they run back to back</p>
             </div>
-            <button type="button" id="clearLog" class="btn-text">Clear</button>
           </div>
-          <div class="log-feed" id="logFeed" role="log" aria-live="polite">
-            <div class="log-empty">
-              <span class="log-empty-icon">◇</span>
-              <p>Waiting for action. Enter your 21-digit code to begin.</p>
+
+          <div class="bulk-rows" id="bulkRows"></div>
+
+          <div class="bulk-summary" id="bulkSummary" hidden>
+            <div class="progress-track">
+              <div class="progress-fill" id="bulkProgressFill"></div>
             </div>
+            <div class="bulk-counts">
+              <span class="chip chip-ok">Done <b id="bulkDone">0</b></span>
+              <span class="chip chip-warn">Skipped <b id="bulkSkipped">0</b></span>
+              <span class="chip chip-bad">Failed <b id="bulkFailed">0</b></span>
+            </div>
+          </div>
+
+          <div class="bulk-actions">
+            <button type="button" id="bulkClearBtn" class="btn-ghost">Clear all</button>
+            <button type="button" id="bulkRunBtn" class="btn-run btn-run-inline" disabled>
+              <span class="btn-label">Run bulk</span>
+              <span class="btn-arrow" aria-hidden="true">→</span>
+              <span class="btn-spinner" hidden aria-hidden="true"></span>
+            </button>
           </div>
         </section>
       </div>
+
+      <!-- ============ ADMIN ============ -->
+      <div class="workspace view" id="viewAdmin" hidden>
+        <section class="panel panel-admin">
+          <div class="panel-head">
+            <div class="panel-icon admin-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M12 3l7 4v5c0 4.4-3 8.3-7 9-4-0.7-7-4.6-7-9V7z"/><path d="M9.5 12l1.8 1.8 3.4-3.6"/>
+              </svg>
+            </div>
+            <div>
+              <h2>Admin dashboard</h2>
+              <p>Every saved run — codes, rewards, IPs and timestamps</p>
+            </div>
+            <span class="role-badge">ADMIN</span>
+          </div>
+
+          <div class="stat-grid" id="statGrid">
+            <div class="stat"><span class="stat-num" id="statTotal">0</span><span class="stat-label">Total runs</span></div>
+            <div class="stat"><span class="stat-num" id="statToday">0</span><span class="stat-label">Today</span></div>
+            <div class="stat"><span class="stat-num" id="statReward">0</span><span class="stat-label">With reward</span></div>
+            <div class="stat"><span class="stat-num" id="statIps">0</span><span class="stat-label">Unique IPs</span></div>
+          </div>
+
+          <div class="admin-toolbar">
+            <input type="search" id="adminSearch" class="admin-search" placeholder="Search code, reward or IP…" spellcheck="false" />
+            <button type="button" id="adminRefresh" class="btn-ghost">Refresh</button>
+            <button type="button" id="adminExport" class="btn-ghost">Export CSV</button>
+            <button type="button" id="adminClear" class="btn-ghost btn-danger">Clear all</button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Receipt code</th><th>Reward</th><th>IP</th><th>When</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="adminRows">
+                <tr><td colspan="6" class="table-empty">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ SHARED ACTIVITY LOG ============ -->
+      <section class="panel panel-log" id="logPanel">
+        <div class="log-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Live bot output</p>
+          </div>
+          <button type="button" id="clearLog" class="btn-text">Clear</button>
+        </div>
+        <div class="log-feed" id="logFeed" role="log" aria-live="polite">
+          <div class="log-empty">
+            <span class="log-empty-icon">◇</span>
+            <p>Waiting for action. Enter your 21-digit code to begin.</p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="footer">
