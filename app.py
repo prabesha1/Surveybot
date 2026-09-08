@@ -3,14 +3,16 @@
 import asyncio
 import json
 import os
+import time
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from auth import TOKEN_TTL, authenticate, create_token, usernames, verify_token
 from storage import init_db, list_completions, save_completion
 from survey_bot import encode_screenshot, run_survey, validate_code
 
@@ -77,6 +79,46 @@ class RunRequest(BaseModel):
     survey_code: str = Field(..., min_length=1)
 
 
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+
+# Simple in-memory brute-force throttle: ip -> [failures, window_start].
+_LOGIN_FAILURES: dict[str, list[float]] = {}
+_MAX_ATTEMPTS = 8
+_LOCKOUT_WINDOW = 300  # seconds
+
+
+def _login_locked(ip: str) -> bool:
+    entry = _LOGIN_FAILURES.get(ip)
+    if not entry:
+        return False
+    failures, started = entry
+    if time.time() - started > _LOCKOUT_WINDOW:
+        _LOGIN_FAILURES.pop(ip, None)
+        return False
+    return failures >= _MAX_ATTEMPTS
+
+
+def _record_login_failure(ip: str) -> None:
+    entry = _LOGIN_FAILURES.get(ip)
+    if not entry or time.time() - entry[1] > _LOCKOUT_WINDOW:
+        _LOGIN_FAILURES[ip] = [1, time.time()]
+    else:
+        entry[0] += 1
+
+
+def require_user(request: Request) -> str:
+    """Reject anyone without a valid signed token."""
+    header = request.headers.get("authorization", "")
+    token = header[7:].strip() if header[:7].lower() == "bearer " else ""
+    user = verify_token(token)
+    if not user:
+        raise HTTPException(401, "Please sign in to run the bot.")
+    return user
+
+
 def _persist_run(receipt_code: str, result: dict, ip_address: str) -> dict | None:
     """Save to SQLite; return saved row summary or None on failure."""
     if result.get("status") != "success":
@@ -112,7 +154,29 @@ async def api_config():
         "apiBase": "",
         "mode": "local",
         "storage": True,
+        "auth": True,
+        "users": usernames(),
     }
+
+
+@app.post("/api/login")
+async def api_login(body: LoginRequest, request: Request):
+    ip = get_client_ip(request)
+    if _login_locked(ip):
+        raise HTTPException(429, "Too many attempts. Try again in a few minutes.")
+
+    user = authenticate(body.username, body.password)
+    if not user:
+        _record_login_failure(ip)
+        raise HTTPException(401, "Incorrect username or password.")
+
+    _LOGIN_FAILURES.pop(ip, None)
+    return {"token": create_token(user), "username": user, "expires_in": TOKEN_TTL}
+
+
+@app.get("/api/me")
+async def api_me(user: str = Depends(require_user)):
+    return {"username": user}
 
 
 @app.get("/api/completions")
@@ -135,7 +199,9 @@ async def screenshot(name: str):
 
 
 @app.post("/api/run-sync")
-async def api_run_sync(body: RunRequest, request: Request):
+async def api_run_sync(
+    body: RunRequest, request: Request, user: str = Depends(require_user)
+):
     ok, msg = validate_code(body.survey_code)
     if not ok:
         raise HTTPException(400, msg)
@@ -171,7 +237,9 @@ async def api_run_sync(body: RunRequest, request: Request):
 
 
 @app.post("/api/run")
-async def api_run(body: RunRequest, request: Request):
+async def api_run(
+    body: RunRequest, request: Request, user: str = Depends(require_user)
+):
     ok, msg = validate_code(body.survey_code)
     if not ok:
         raise HTTPException(400, msg)

@@ -17,163 +17,176 @@
     <div class="grid-overlay"></div>
   </div>
 
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark">PT</div>
-      <div class="brand-copy">
-        <span class="brand-name">Prabesh Tims Bot</span>
-        <span class="brand-sub">Tim Hortons survey automation</span>
+  <!-- ============ LOGIN ============ -->
+  <div class="auth-screen" id="authScreen">
+    <div class="auth-card" id="authCard">
+      <div class="auth-brand">
+        <div class="brand-mark auth-mark">PT</div>
+        <h1>Prabesh Tims Bot</h1>
+        <p class="auth-tag">
+          <span class="lock-dot" aria-hidden="true"></span>
+          Private access · authorized users only
+        </p>
       </div>
-    </div>
-    <span class="status-pill" id="statusPill">Ready</span>
-  </header>
 
-  <main class="shell">
-    <div class="workspace">
-      <section class="panel panel-scan">
-        <div class="panel-head">
-          <div class="panel-icon scan-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-          </div>
-          <div>
-            <h2>Receipt scanner</h2>
-            <p>Camera or gallery — we extract the code automatically</p>
-          </div>
-        </div>
-
-        <div class="action-grid">
-          <button type="button" id="openCameraBtn" class="action-tile">
-            <span class="tile-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="13" r="4"/>
+      <form class="auth-form" id="authForm" autocomplete="off">
+        <div class="field">
+          <span class="field-label" id="userLabel">Username</span>
+          <div class="picker" id="userPicker">
+            <button
+              type="button"
+              class="picker-trigger"
+              id="pickerTrigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-labelledby="userLabel"
+            >
+              <span class="picker-avatar" id="pickerAvatar" hidden></span>
+              <span class="picker-value placeholder" id="pickerValue">Choose your username</span>
+              <svg class="picker-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-            </span>
-            <strong>Open camera</strong>
-            <small>Live capture</small>
-          </button>
-          <label for="photoInput" class="action-tile">
-            <span class="tile-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <path d="M21 15l-5-5L5 21"/>
+            </button>
+            <ul class="picker-menu" id="pickerMenu" role="listbox" aria-labelledby="userLabel" hidden></ul>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="password">Password</label>
+          <div class="password-wrap">
+            <input
+              id="password"
+              type="password"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              spellcheck="false"
+            />
+            <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
               </svg>
-            </span>
-            <strong>Upload photo</strong>
-            <small>From gallery</small>
-          </label>
-          <input type="file" id="photoInput" accept="image/*" hidden />
-          <input type="file" id="cameraFileInput" accept="image/*" capture="environment" hidden />
-        </div>
-
-        <div class="scan-preview" id="scanPreview" hidden>
-          <img id="scanPreviewImg" alt="Receipt preview" />
-          <p class="scan-status" id="scanStatus"></p>
-        </div>
-      </section>
-
-      <section class="panel panel-code">
-        <div class="panel-head">
-          <div class="panel-icon code-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-              <rect x="3" y="5" width="18" height="14" rx="2"/>
-              <path d="M7 9h10M7 13h6"/>
-            </svg>
-          </div>
-          <div>
-            <h2>Survey code</h2>
-            <p>21 digits printed at the bottom of your receipt</p>
+            </button>
           </div>
         </div>
 
-        <label for="surveyCode" class="sr-only">Survey code</label>
-        <div class="code-field">
-          <input
-            id="surveyCode"
-            type="text"
-            inputmode="numeric"
-            autocomplete="off"
-            placeholder="Enter 21-digit code"
-            maxlength="27"
-            spellcheck="false"
-          />
-          <div class="code-meta">
-            <span class="digit-count" id="digitCount">0 / 21</span>
-            <span class="digit-bar" aria-hidden="true"><span id="digitBarFill"></span></span>
-          </div>
-        </div>
+        <p class="auth-error" id="authError" hidden role="alert"></p>
 
-        <button type="button" id="runBtn" class="btn-run">
-          <span class="btn-label">Start survey</span>
+        <button type="submit" class="btn-run auth-submit" id="authSubmit" disabled>
+          <span class="btn-label">Sign in</span>
           <span class="btn-arrow" aria-hidden="true">→</span>
           <span class="btn-spinner" hidden aria-hidden="true"></span>
         </button>
-      </section>
-
-      <section class="panel panel-progress" id="progressCard" hidden>
-        <div class="progress-top">
-          <h2>Running survey</h2>
-          <span class="progress-pct" id="progressPct">0%</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" id="progressFill"></div>
-        </div>
-        <p class="current-step" id="currentStep">Connecting…</p>
-      </section>
-
-      <div class="result-banner" id="resultBanner" hidden role="status"></div>
-
-      <figure class="screenshot-wrap" id="screenshotWrap" hidden>
-        <figcaption>Completion screenshot</figcaption>
-        <img id="screenshotImg" alt="Survey completion screenshot" />
-      </figure>
-
-      <section class="panel panel-log">
-        <div class="log-head">
-          <div>
-            <h2>Activity</h2>
-            <p>Live bot output</p>
-          </div>
-          <button type="button" id="clearLog" class="btn-text">Clear</button>
-        </div>
-        <div class="log-feed" id="logFeed" role="log" aria-live="polite">
-          <div class="log-empty">
-            <span class="log-empty-icon">◇</span>
-            <p>Waiting for action. Scan a receipt or enter your code.</p>
-          </div>
-        </div>
-      </section>
+      </form>
     </div>
-  </main>
 
-  <footer class="footer">
-    <p>Prabesh Tims Bot · One code per receipt</p>
-    <p class="footer-credit">Made with <span class="footer-heart" aria-hidden="true">♥</span> by Prabesh Shrestha</p>
-  </footer>
-
-  <div class="modal" id="cameraModal" hidden role="dialog" aria-labelledby="cameraModalTitle" aria-modal="true">
-    <div class="modal-backdrop" id="cameraBackdrop"></div>
-    <div class="modal-panel">
-      <div class="modal-head">
-        <h2 id="cameraModalTitle">Scan receipt code</h2>
-        <button type="button" id="closeCameraBtn" class="btn-icon" aria-label="Close">×</button>
-      </div>
-      <p class="camera-status" id="cameraStatus">Starting camera…</p>
-      <div class="camera-wrap">
-        <video id="cameraVideo" autoplay playsinline muted></video>
-        <canvas id="captureCanvas" hidden></canvas>
-      </div>
-      <p class="camera-error" id="cameraError" hidden></p>
-      <button type="button" id="captureBtn" class="btn-run btn-run-modal">Capture &amp; scan</button>
-      <button type="button" id="nativeCameraBtn" class="btn-run btn-run-modal btn-run-alt" hidden>Use phone camera instead</button>
-    </div>
+    <p class="auth-credit">Made with <span class="footer-heart" aria-hidden="true">♥</span> by Prabesh Shrestha</p>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- ============ APP ============ -->
+  <div class="app-root" id="appRoot" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">PT</div>
+        <div class="brand-copy">
+          <span class="brand-name">Prabesh Tims Bot</span>
+          <span class="brand-sub">Tim Hortons survey automation</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="status-pill" id="statusPill">Ready</span>
+        <button type="button" class="user-chip" id="logoutBtn" title="Sign out">
+          <span class="user-avatar" id="userAvatar">··</span>
+          <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke-linecap="round"/>
+            <path d="M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <div class="workspace">
+        <section class="panel panel-code">
+          <div class="panel-head">
+            <div class="panel-icon code-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                <path d="M7 9h10M7 13h6"/>
+              </svg>
+            </div>
+            <div>
+              <h2>Survey code</h2>
+              <p>21 digits printed at the bottom of your receipt</p>
+            </div>
+          </div>
+
+          <label for="surveyCode" class="sr-only">Survey code</label>
+          <div class="code-field">
+            <input
+              id="surveyCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="Enter 21-digit code"
+              maxlength="27"
+              spellcheck="false"
+            />
+            <div class="code-meta">
+              <span class="digit-count" id="digitCount">0 / 21</span>
+              <span class="digit-bar" aria-hidden="true"><span id="digitBarFill"></span></span>
+            </div>
+          </div>
+
+          <button type="button" id="runBtn" class="btn-run">
+            <span class="btn-label">Start survey</span>
+            <span class="btn-arrow" aria-hidden="true">→</span>
+            <span class="btn-spinner" hidden aria-hidden="true"></span>
+          </button>
+        </section>
+
+        <section class="panel panel-progress" id="progressCard" hidden>
+          <div class="progress-top">
+            <h2>Running survey</h2>
+            <span class="progress-pct" id="progressPct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="current-step" id="currentStep">Connecting…</p>
+        </section>
+
+        <div class="result-banner" id="resultBanner" hidden role="status"></div>
+
+        <figure class="screenshot-wrap" id="screenshotWrap" hidden>
+          <figcaption>Completion screenshot</figcaption>
+          <img id="screenshotImg" alt="Survey completion screenshot" />
+        </figure>
+
+        <section class="panel panel-log">
+          <div class="log-head">
+            <div>
+              <h2>Activity</h2>
+              <p>Live bot output</p>
+            </div>
+            <button type="button" id="clearLog" class="btn-text">Clear</button>
+          </div>
+          <div class="log-feed" id="logFeed" role="log" aria-live="polite">
+            <div class="log-empty">
+              <span class="log-empty-icon">◇</span>
+              <p>Waiting for action. Enter your 21-digit code to begin.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>Prabesh Tims Bot · One code per receipt</p>
+      <p class="footer-credit">Made with <span class="footer-heart" aria-hidden="true">♥</span> by Prabesh Shrestha</p>
+    </footer>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

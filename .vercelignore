@@ -8,6 +8,7 @@ Dockerfile
 render.yaml
 fly.toml
 storage.py
+auth.py
 tims_survey_bot_FINAL.py
 survey_bot.py
 app.py

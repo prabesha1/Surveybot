@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Ensure the Chromium build matching the installed Playwright is present.
 RUN playwright install chromium
 
-COPY survey_bot.py app.py storage.py ./
+COPY survey_bot.py app.py storage.py auth.py ./
 COPY public ./public
 
 ENV PORT=8000

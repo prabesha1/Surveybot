@@ -1,8 +1,35 @@
+/* ---------------- Authorized users (validated server-side too) ---------------- */
+const AUTH_USERS = [
+  { value: "ironman", initials: "IM", tag: "Owner" },
+  { value: "Ajaya Purja", initials: "AP", tag: "Authorized" },
+];
+const TOKEN_KEY = "ptb_token";
+const NAME_KEY = "ptb_user";
+
+/* ---------------- Elements ---------------- */
+const authScreen = document.getElementById("authScreen");
+const authCard = document.getElementById("authCard");
+const authForm = document.getElementById("authForm");
+const authError = document.getElementById("authError");
+const authSubmit = document.getElementById("authSubmit");
+const passwordInput = document.getElementById("password");
+const pwToggle = document.getElementById("pwToggle");
+const pickerTrigger = document.getElementById("pickerTrigger");
+const pickerMenu = document.getElementById("pickerMenu");
+const pickerValue = document.getElementById("pickerValue");
+const pickerAvatar = document.getElementById("pickerAvatar");
+
+const appRoot = document.getElementById("appRoot");
+const logoutBtn = document.getElementById("logoutBtn");
+const userAvatar = document.getElementById("userAvatar");
+
 const surveyCode = document.getElementById("surveyCode");
 const digitCount = document.getElementById("digitCount");
+const digitBarFill = document.getElementById("digitBarFill");
 const runBtn = document.getElementById("runBtn");
 const btnLabel = runBtn.querySelector(".btn-label");
 const btnSpinner = runBtn.querySelector(".btn-spinner");
+const btnArrow = runBtn.querySelector(".btn-arrow");
 const progressCard = document.getElementById("progressCard");
 const progressFill = document.getElementById("progressFill");
 const progressPct = document.getElementById("progressPct");
@@ -12,64 +39,257 @@ const clearLog = document.getElementById("clearLog");
 const resultBanner = document.getElementById("resultBanner");
 const screenshotWrap = document.getElementById("screenshotWrap");
 const screenshotImg = document.getElementById("screenshotImg");
-
-const openCameraBtn = document.getElementById("openCameraBtn");
-const photoInput = document.getElementById("photoInput");
-const cameraFileInput = document.getElementById("cameraFileInput");
-const scanPreview = document.getElementById("scanPreview");
-const scanPreviewImg = document.getElementById("scanPreviewImg");
-const scanStatus = document.getElementById("scanStatus");
-const cameraModal = document.getElementById("cameraModal");
-const cameraBackdrop = document.getElementById("cameraBackdrop");
-const cameraVideo = document.getElementById("cameraVideo");
-const captureCanvas = document.getElementById("captureCanvas");
-const captureBtn = document.getElementById("captureBtn");
-const closeCameraBtn = document.getElementById("closeCameraBtn");
-const cameraStatus = document.getElementById("cameraStatus");
-const cameraError = document.getElementById("cameraError");
-const nativeCameraBtn = document.getElementById("nativeCameraBtn");
 const statusPill = document.getElementById("statusPill");
-const digitBarFill = document.getElementById("digitBarFill");
-const photoLabel = document.querySelector('label[for="photoInput"]');
-const btnArrow = runBtn.querySelector(".btn-arrow");
 
 let running = false;
-let scanning = false;
-let cameraStream = null;
-let ocrWorker = null;
-let deployMode = "local";
 let apiBase = "";
+let selectedUser = "";
+let token = localStorage.getItem(TOKEN_KEY) || "";
+
+/* ---------------- Helpers ---------------- */
+function apiUrl(path) {
+  return apiBase ? `${apiBase}${path}` : path;
+}
 
 function digitsOnly(value) {
   return value.replace(/\D/g, "");
 }
 
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function initialsFor(name) {
+  const found = AUTH_USERS.find((u) => u.value === name);
+  if (found) return found.initials;
+  return name.slice(0, 2).toUpperCase();
+}
+
+/* ---------------- Username picker ---------------- */
+function buildPicker() {
+  pickerMenu.innerHTML = AUTH_USERS.map(
+    (u, i) => `
+      <li class="picker-option" role="option" tabindex="-1"
+          data-value="${escapeHtml(u.value)}" aria-selected="false"
+          style="--i:${i}">
+        <span class="option-avatar">${escapeHtml(u.initials)}</span>
+        <span class="option-copy">
+          <strong>${escapeHtml(u.value)}</strong>
+          <small>${escapeHtml(u.tag)}</small>
+        </span>
+        <svg class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+          <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </li>`
+  ).join("");
+}
+
+function openPicker() {
+  pickerMenu.hidden = false;
+  // Next frame so the open animation runs from its start state.
+  requestAnimationFrame(() => pickerMenu.classList.add("open"));
+  pickerTrigger.setAttribute("aria-expanded", "true");
+}
+
+function closePicker() {
+  pickerMenu.classList.remove("open");
+  pickerTrigger.setAttribute("aria-expanded", "false");
+  setTimeout(() => {
+    if (!pickerMenu.classList.contains("open")) pickerMenu.hidden = true;
+  }, 180);
+}
+
+function isPickerOpen() {
+  return pickerTrigger.getAttribute("aria-expanded") === "true";
+}
+
+function selectUser(value) {
+  selectedUser = value;
+  pickerValue.textContent = value;
+  pickerValue.classList.remove("placeholder");
+  pickerAvatar.textContent = initialsFor(value);
+  pickerAvatar.hidden = false;
+  pickerTrigger.classList.add("filled");
+
+  pickerMenu.querySelectorAll(".picker-option").forEach((el) => {
+    const on = el.dataset.value === value;
+    el.classList.toggle("selected", on);
+    el.setAttribute("aria-selected", on ? "true" : "false");
+  });
+
+  hideAuthError();
+  refreshAuthSubmit();
+}
+
+pickerTrigger.addEventListener("click", () => {
+  isPickerOpen() ? closePicker() : openPicker();
+});
+
+pickerMenu.addEventListener("click", (e) => {
+  const option = e.target.closest(".picker-option");
+  if (!option) return;
+  selectUser(option.dataset.value);
+  closePicker();
+  passwordInput.focus();
+});
+
+document.addEventListener("click", (e) => {
+  if (!isPickerOpen()) return;
+  if (!e.target.closest("#userPicker")) closePicker();
+});
+
+pickerTrigger.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    if (!isPickerOpen()) openPicker();
+    pickerMenu.querySelector(".picker-option")?.focus();
+  } else if (e.key === "Escape") {
+    closePicker();
+  }
+});
+
+pickerMenu.addEventListener("keydown", (e) => {
+  const options = [...pickerMenu.querySelectorAll(".picker-option")];
+  const idx = options.indexOf(document.activeElement);
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    options[Math.min(idx + 1, options.length - 1)]?.focus();
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (idx <= 0) pickerTrigger.focus();
+    else options[idx - 1].focus();
+  } else if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    if (idx >= 0) {
+      selectUser(options[idx].dataset.value);
+      closePicker();
+      passwordInput.focus();
+    }
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closePicker();
+    pickerTrigger.focus();
+  }
+});
+
+/* ---------------- Password field ---------------- */
+pwToggle.addEventListener("click", () => {
+  const show = passwordInput.type === "password";
+  passwordInput.type = show ? "text" : "password";
+  pwToggle.classList.toggle("on", show);
+  pwToggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  passwordInput.focus();
+});
+
+passwordInput.addEventListener("input", () => {
+  hideAuthError();
+  refreshAuthSubmit();
+});
+
+function refreshAuthSubmit() {
+  authSubmit.disabled = !selectedUser || !passwordInput.value;
+}
+
+function showAuthError(message) {
+  authError.textContent = message;
+  authError.hidden = false;
+  authCard.classList.remove("shake");
+  void authCard.offsetWidth; // restart the shake animation
+  authCard.classList.add("shake");
+}
+
+function hideAuthError() {
+  authError.hidden = true;
+  authCard.classList.remove("shake");
+}
+
+function setAuthLoading(on) {
+  authSubmit.disabled = on || !selectedUser || !passwordInput.value;
+  authSubmit.querySelector(".btn-label").textContent = on ? "Signing in…" : "Sign in";
+  authSubmit.querySelector(".btn-spinner").hidden = !on;
+  authSubmit.querySelector(".btn-arrow").hidden = on;
+}
+
+/* ---------------- Login / logout ---------------- */
+authForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!selectedUser || !passwordInput.value) return;
+
+  setAuthLoading(true);
+  try {
+    const res = await fetch(apiUrl("/api/login"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: selectedUser, password: passwordInput.value }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      showAuthError(data.detail || "Incorrect username or password.");
+      passwordInput.select();
+      return;
+    }
+
+    token = data.token;
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(NAME_KEY, data.username);
+    passwordInput.value = "";
+    enterApp(data.username);
+  } catch (err) {
+    showAuthError("Cannot reach the server. Please try again.");
+  } finally {
+    setAuthLoading(false);
+  }
+});
+
+function enterApp(username) {
+  userAvatar.textContent = initialsFor(username);
+  logoutBtn.title = `Signed in as ${username} — sign out`;
+
+  authScreen.classList.add("leaving");
+  setTimeout(() => {
+    authScreen.hidden = true;
+    authScreen.classList.remove("leaving");
+    appRoot.hidden = false;
+    surveyCode.focus();
+  }, 380);
+}
+
+function logout(message) {
+  token = "";
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(NAME_KEY);
+
+  appRoot.hidden = true;
+  authScreen.hidden = false;
+  passwordInput.value = "";
+  refreshAuthSubmit();
+  if (message) showAuthError(message);
+  else hideAuthError();
+}
+
+logoutBtn.addEventListener("click", () => logout());
+
+/* ---------------- Survey code field ---------------- */
 function setStatusPill(text, state) {
-  if (!statusPill) return;
   statusPill.textContent = text;
   statusPill.className = "status-pill" + (state ? ` ${state}` : "");
 }
 
 function updateDigitCount() {
   const n = digitsOnly(surveyCode.value).length;
-  const pct = Math.min(100, Math.round((n / 21) * 100));
   digitCount.textContent = `${n} / 21`;
   digitCount.classList.toggle("ready", n === 21);
-  if (digitBarFill) digitBarFill.style.width = `${pct}%`;
-  const locked = running || scanning;
-  runBtn.disabled = locked || n !== 21;
-  openCameraBtn.disabled = locked;
-  photoInput.disabled = locked;
-  if (cameraFileInput) cameraFileInput.disabled = locked;
-  openCameraBtn.classList.toggle("disabled", locked);
-  if (photoLabel) photoLabel.classList.toggle("disabled", locked);
-  if (!running && !scanning && n === 21) setStatusPill("Ready", "");
+  digitBarFill.style.width = `${Math.min(100, Math.round((n / 21) * 100))}%`;
+  runBtn.disabled = running || n !== 21;
+  if (!running && n === 21) setStatusPill("Ready", "");
 }
 
 surveyCode.addEventListener("input", () => {
-  const raw = surveyCode.value;
-  const cleaned = digitsOnly(raw);
-  if (raw !== cleaned) surveyCode.value = cleaned;
+  const cleaned = digitsOnly(surveyCode.value);
+  if (surveyCode.value !== cleaned) surveyCode.value = cleaned;
   updateDigitCount();
 });
 
@@ -78,11 +298,12 @@ function setRunning(on) {
   surveyCode.disabled = on;
   btnLabel.textContent = on ? "Running…" : "Start survey";
   btnSpinner.hidden = !on;
-  if (btnArrow) btnArrow.hidden = on;
+  btnArrow.hidden = on;
   setStatusPill(on ? "Running" : "Ready", on ? "running" : "");
   updateDigitCount();
 }
 
+/* ---------------- Log + progress ---------------- */
 function clearLogFeed() {
   logFeed.innerHTML = `
     <div class="log-empty">
@@ -92,21 +313,17 @@ function clearLogFeed() {
 }
 
 function appendLog(message, level = "info") {
-  const empty = logFeed.querySelector(".log-empty");
-  if (empty) empty.remove();
-
+  logFeed.querySelector(".log-empty")?.remove();
   const line = document.createElement("p");
   line.className = `log-line ${level}`;
-  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const time = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
   line.innerHTML = `<time>${time}</time>${escapeHtml(message)}`;
   logFeed.appendChild(line);
   logFeed.scrollTop = logFeed.scrollHeight;
-}
-
-function escapeHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
 }
 
 function parseProgress(message) {
@@ -123,11 +340,14 @@ function showProgress(pct, stepText) {
 
 function showResult(status, message, screenshot, screenshotB64) {
   resultBanner.hidden = false;
-  resultBanner.className = `result-banner ${status === "success" ? "success" : status === "used" || status === "stuck" ? "warn" : "error"}`;
+  resultBanner.className =
+    "result-banner " +
+    (status === "success" ? "success" : status === "used" || status === "stuck" ? "warn" : "error");
   resultBanner.textContent = message;
+
   if (status === "success") setStatusPill("Done", "success");
   else if (status === "used" || status === "stuck") setStatusPill("Warning", "error");
-  else if (status === "error") setStatusPill("Error", "error");
+  else setStatusPill("Error", "error");
 
   screenshotWrap.hidden = true;
   if (screenshotB64) {
@@ -153,6 +373,7 @@ function processLogEntry(data) {
 function processDone(data) {
   const pct = data.status === "success" ? 100 : parseProgress(data.message) ?? 0;
   showProgress(pct, data.message);
+
   let msg = data.message;
   if (data.reward_code) {
     msg = `Reward code: ${data.reward_code}` + (data.saved?.saved ? " · Saved with your IP & time." : "");
@@ -160,52 +381,33 @@ function processDone(data) {
     msg += " · Run saved (time & IP recorded).";
   }
   showResult(data.status, msg, data.screenshot, data.screenshot_b64);
-  if (data.reward_code) {
-    appendLog(`Reward code: ${data.reward_code}`, "success");
-  }
+  if (data.reward_code) appendLog(`Reward code: ${data.reward_code}`, "success");
 }
 
+/* ---------------- Config + run ---------------- */
 async function loadDeployConfig() {
   try {
     const res = await fetch("/deploy.json");
     if (res.ok) {
       const cfg = await res.json();
       apiBase = (cfg.apiBase || "").replace(/\/$/, "");
-      deployMode = cfg.mode || (apiBase ? "remote" : "unconfigured");
-      if (deployMode === "unconfigured") {
-        appendLog(
-          "Set BOT_API_URL on Vercel to https://ap-survey-bot.onrender.com (or use Render URL only).",
-          "warn"
-        );
-      }
       return;
     }
   } catch {
-    /* deploy.json only exists after Vercel build */
+    /* deploy.json only exists on the Vercel build */
   }
-
   try {
     const res = await fetch("/api/config");
     if (!res.ok) return;
     const cfg = await res.json();
-    deployMode = cfg.mode || "local";
     apiBase = (cfg.apiBase || "").replace(/\/$/, "");
   } catch {
-    deployMode = "local";
+    /* fall back to same-origin */
   }
 }
 
 function surveyRunUrl() {
-  if (apiBase) return `${apiBase}/api/run-sync`;
-  return "/api/run";
-}
-
-function parseApiError(err) {
-  if (err.message) return err.message;
-  if (err.detail) {
-    return Array.isArray(err.detail) ? err.detail[0]?.msg : err.detail;
-  }
-  return "Request failed";
+  return apiBase ? `${apiBase}/api/run-sync` : "/api/run";
 }
 
 async function runSurveyStream(res) {
@@ -225,292 +427,11 @@ async function runSurveyStream(res) {
       const line = part.split("\n").find((l) => l.startsWith("data: "));
       if (!line) continue;
       const data = JSON.parse(line.slice(6));
-
-      if (data.type === "log") {
-        processLogEntry(data);
-      } else if (data.type === "done") {
-        processDone(data);
-      }
+      if (data.type === "log") processLogEntry(data);
+      else if (data.type === "done") processDone(data);
     }
   }
 }
-
-async function runSurveyJson(data) {
-  for (const entry of data.logs || []) {
-    processLogEntry(entry);
-  }
-  processDone(data);
-}
-
-/** Find a 21-digit survey code from OCR text. */
-function extractSurveyCode(text) {
-  const candidates = [];
-
-  const spaced = text.match(/\d[\d\s\-]{19,40}\d/g) || [];
-  for (const chunk of spaced) {
-    const d = digitsOnly(chunk);
-    if (d.length === 21) candidates.push(d);
-    if (d.length > 21) {
-      for (let i = 0; i <= d.length - 21; i++) {
-        candidates.push(d.slice(i, i + 21));
-      }
-    }
-  }
-
-  const all = digitsOnly(text);
-  if (all.length === 21) candidates.push(all);
-  if (all.length > 21) {
-    for (let i = 0; i <= all.length - 21; i++) {
-      candidates.push(all.slice(i, i + 21));
-    }
-  }
-
-  const unique = [...new Set(candidates.filter((c) => c.length === 21 && /^\d{21}$/.test(c)))];
-  if (unique.length === 1) return unique[0];
-  if (unique.length > 1) {
-    return unique.find((c) => !c.startsWith("000")) || unique[0];
-  }
-  return null;
-}
-
-function preprocessForOcr(source) {
-  const maxW = 1400;
-  const scale = source.width > maxW ? maxW / source.width : 1;
-  const w = Math.round(source.width * scale);
-  const h = Math.round(source.height * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(source, 0, 0, w, h);
-
-  const img = ctx.getImageData(0, 0, w, h);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    const boosted = gray < 128 ? Math.max(0, gray - 30) : Math.min(255, gray + 40);
-    const v = boosted > 140 ? 255 : boosted < 90 ? 0 : boosted;
-    d[i] = d[i + 1] = d[i + 2] = v;
-  }
-  ctx.putImageData(img, 0, 0);
-  return canvas;
-}
-
-async function getOcrWorker() {
-  if (!ocrWorker) {
-    ocrWorker = await Tesseract.createWorker("eng", 1, {
-      logger: (m) => {
-        if (m.status === "recognizing text" && m.progress) {
-          const pct = Math.round(m.progress * 100);
-          scanStatus.textContent = `Reading text… ${pct}%`;
-        }
-      },
-    });
-    await ocrWorker.setParameters({
-      tessedit_char_whitelist: "0123456789 -",
-    });
-  }
-  return ocrWorker;
-}
-
-function setScanUi(state, message) {
-  scanStatus.textContent = message;
-  scanStatus.className = `scan-status ${state}`;
-  scanning = state === "scanning";
-  if (state === "scanning") setStatusPill("Scanning", "running");
-  updateDigitCount();
-}
-
-async function recognizeCode(canvas) {
-  const worker = await getOcrWorker();
-  let { data } = await worker.recognize(canvas);
-  let code = extractSurveyCode(data.text);
-  if (code) return code;
-
-  await worker.setParameters({ tessedit_char_whitelist: "" });
-  ({ data } = await worker.recognize(canvas));
-  await worker.setParameters({ tessedit_char_whitelist: "0123456789 -" });
-  return extractSurveyCode(data.text);
-}
-
-async function scanImage(source, previewUrl) {
-  scanPreview.hidden = false;
-  if (previewUrl) scanPreviewImg.src = previewUrl;
-  setScanUi("scanning", "Scanning receipt for 21-digit code…");
-  appendLog("Scanning receipt image…", "info");
-
-  try {
-    const canvas = preprocessForOcr(source);
-    const code = await recognizeCode(canvas);
-
-    if (code) {
-      surveyCode.value = code;
-      updateDigitCount();
-      setScanUi("success", `Code detected: ${code}`);
-      appendLog(`Detected code: …${code.slice(-6)}`, "success");
-      surveyCode.focus();
-    } else {
-      setScanUi("error", "Could not find a 21-digit code. Try a clearer photo or type it manually.");
-      appendLog("No 21-digit code found in image.", "warn");
-    }
-  } catch (e) {
-    setScanUi("error", e.message || "Scan failed.");
-    appendLog(`Scan error: ${e.message}`, "error");
-  }
-}
-
-function loadImageFromFile(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => resolve({ img, url });
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Could not load image."));
-    };
-    img.src = url;
-  });
-}
-
-async function handlePhotoFile(file) {
-  if (!file || running) return;
-  try {
-    const { img, url } = await loadImageFromFile(file);
-    await scanImage(img, url);
-  } catch (e) {
-    setScanUi("error", e.message);
-    appendLog(e.message, "error");
-  }
-}
-
-photoInput.addEventListener("change", async () => {
-  const file = photoInput.files?.[0];
-  photoInput.value = "";
-  await handlePhotoFile(file);
-});
-
-if (cameraFileInput) {
-  cameraFileInput.addEventListener("change", async () => {
-    const file = cameraFileInput.files?.[0];
-    cameraFileInput.value = "";
-    closeCameraModal();
-    await handlePhotoFile(file);
-  });
-}
-
-function setCameraStatus(text) {
-  if (cameraStatus) cameraStatus.textContent = text;
-}
-
-function showCameraError(text) {
-  if (!cameraError) return;
-  cameraError.textContent = text;
-  cameraError.hidden = !text;
-}
-
-function canUseLiveCamera() {
-  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-}
-
-async function startCamera() {
-  const attempts = [
-    { video: { facingMode: { exact: "environment" } }, audio: false },
-    { video: { facingMode: "environment" }, audio: false },
-    { video: { facingMode: "user" }, audio: false },
-    { video: true, audio: false },
-  ];
-
-  let lastError = null;
-  for (const constraints of attempts) {
-    try {
-      cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-      cameraVideo.srcObject = cameraStream;
-      await cameraVideo.play();
-      setCameraStatus("Point at the receipt code, then tap Capture.");
-      showCameraError("");
-      if (nativeCameraBtn) nativeCameraBtn.hidden = true;
-      return;
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw lastError || new Error("Camera not available");
-}
-
-function stopCamera() {
-  if (cameraStream) {
-    cameraStream.getTracks().forEach((t) => t.stop());
-    cameraStream = null;
-  }
-  cameraVideo.srcObject = null;
-}
-
-function openCameraModal() {
-  cameraModal.hidden = false;
-  document.body.style.overflow = "hidden";
-}
-
-function closeCameraModal() {
-  cameraModal.hidden = true;
-  document.body.style.overflow = "";
-  stopCamera();
-  showCameraError("");
-  if (nativeCameraBtn) nativeCameraBtn.hidden = true;
-}
-
-function openNativeCamera() {
-  if (cameraFileInput) cameraFileInput.click();
-}
-
-openCameraBtn.addEventListener("click", async () => {
-  if (running || scanning) return;
-
-  if (!canUseLiveCamera()) {
-    openNativeCamera();
-    return;
-  }
-
-  openCameraModal();
-  setCameraStatus("Starting camera…");
-  showCameraError("");
-  if (captureBtn) captureBtn.disabled = false;
-
-  try {
-    await startCamera();
-  } catch (e) {
-    setCameraStatus("Live camera unavailable");
-    showCameraError("Allow camera access in your browser, or use the button below.");
-    if (nativeCameraBtn) nativeCameraBtn.hidden = false;
-    if (captureBtn) captureBtn.disabled = true;
-    appendLog("Live camera unavailable — use native camera or upload from gallery.", "warn");
-    scanPreview.hidden = false;
-    setScanUi("error", "Live camera blocked. Tap “Use phone camera instead” or upload from gallery.");
-  }
-});
-
-closeCameraBtn.addEventListener("click", closeCameraModal);
-cameraBackdrop.addEventListener("click", closeCameraModal);
-if (nativeCameraBtn) nativeCameraBtn.addEventListener("click", openNativeCamera);
-
-captureBtn.addEventListener("click", async () => {
-  if (!cameraStream) return;
-
-  const w = cameraVideo.videoWidth;
-  const h = cameraVideo.videoHeight;
-  captureCanvas.width = w;
-  captureCanvas.height = h;
-  captureCanvas.getContext("2d").drawImage(cameraVideo, 0, 0, w, h);
-
-  const previewUrl = captureCanvas.toDataURL("image/jpeg", 0.92);
-  closeCameraModal();
-
-  const img = new Image();
-  img.onload = () => scanImage(img, previewUrl);
-  img.src = previewUrl;
-});
-
-clearLog.addEventListener("click", clearLogFeed);
 
 runBtn.addEventListener("click", async () => {
   const code = digitsOnly(surveyCode.value);
@@ -519,28 +440,33 @@ runBtn.addEventListener("click", async () => {
   setRunning(true);
   resultBanner.hidden = true;
   screenshotWrap.hidden = true;
-  progressCard.hidden = false;
   showProgress(0, "Connecting to survey…");
   appendLog("Starting bot…", "info");
 
   try {
     const res = await fetch(surveyRunUrl(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({ survey_code: code }),
     });
 
-    const contentType = res.headers.get("content-type") || "";
-    const isJson = contentType.includes("application/json");
+    if (res.status === 401) {
+      logout("Your session expired. Please sign in again.");
+      return;
+    }
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(parseApiError(err));
+      throw new Error(err.detail || err.message || "Request failed");
     }
 
-    if (isJson) {
+    if ((res.headers.get("content-type") || "").includes("application/json")) {
       const data = await res.json();
-      await runSurveyJson(data);
+      (data.logs || []).forEach(processLogEntry);
+      processDone(data);
     } else {
       await runSurveyStream(res);
     }
@@ -552,5 +478,39 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
-loadDeployConfig().then(updateDigitCount);
-updateDigitCount();
+clearLog.addEventListener("click", clearLogFeed);
+
+/* ---------------- Boot ---------------- */
+async function boot() {
+  buildPicker();
+  await loadDeployConfig();
+
+  // Restore a previous session if the saved token is still valid.
+  if (token) {
+    try {
+      const res = await fetch(apiUrl("/api/me"), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const me = await res.json();
+        authScreen.hidden = true;
+        appRoot.hidden = false;
+        userAvatar.textContent = initialsFor(me.username);
+        logoutBtn.title = `Signed in as ${me.username} — sign out`;
+      } else {
+        localStorage.removeItem(TOKEN_KEY);
+        token = "";
+      }
+    } catch {
+      /* offline — stay on the login screen */
+    }
+  }
+
+  const savedName = localStorage.getItem(NAME_KEY);
+  if (savedName && AUTH_USERS.some((u) => u.value === savedName)) selectUser(savedName);
+
+  updateDigitCount();
+  refreshAuthSubmit();
+}
+
+boot();
